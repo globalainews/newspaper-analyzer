@@ -45,3 +45,6 @@ analysis_results/
 *.png
 *.gif
 *.txt
+
+# Config (contains sensitive API key)
+config.json
