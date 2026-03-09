@@ -548,17 +548,36 @@ class EnhancedKioskoDownloader:
                         x2_scaled = x_offset + int(x2 * ratio)
                         y2_scaled = y_offset + int(y2 * ratio)
                         
-                        color = colors[i % len(colors)]
+                        # 报纸内容区域使用特殊样式
+                        if block['title'] == '报纸内容区域':
+                            color = '#000000'
+                            line_width = 3
+                            dash_pattern = (5, 5)
+                        else:
+                            color = colors[i % len(colors)]
+                            line_width = 2
+                            dash_pattern = None
+                        
                         # 绘制矩形框
+                        kwargs = {
+                            'outline': color, 
+                            'width': line_width, 
+                            'tags': f'news_block_{i}'
+                        }
+                        if dash_pattern:
+                            kwargs['dash'] = dash_pattern
+                        
                         self.preview_canvas.create_rectangle(
                             x1_scaled, y1_scaled, x2_scaled, y2_scaled,
-                            outline=color, width=2, tags=f'news_block_{i}'
+                            **kwargs
                         )
+                        
                         # 绘制标签
+                        label_text = '报纸内容区域' if block['title'] == '报纸内容区域' else f"{i+1}. {block['title'][:10]}..."
                         label_y = y1_scaled - 20 if y1_scaled - 20 > 0 else y1_scaled
                         self.preview_canvas.create_text(
                             x1_scaled + 5, label_y,
-                            text=f"{i+1}. {block['title'][:10]}...",
+                            text=label_text,
                             fill=color, font=("Microsoft YaHei", 9, "bold"),
                             anchor=tk.SW
                         )
@@ -593,25 +612,29 @@ class EnhancedKioskoDownloader:
                         break
                     
                     # 解析新闻块
-                    if line.strip().startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.')):
+                    if line.strip().startswith(('0.', '1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.')):
                         try:
-                            # 解析新闻标题
+                            # 解析新闻标题或报纸内容区域
                             title_line = line.strip()
                             if '新闻标题:' in title_line:
                                 title = title_line.split('新闻标题:')[-1].strip()
+                            elif '报纸内容区域' in title_line:
+                                title = '报纸内容区域'
+                            else:
+                                continue
                                 
-                                # 查找下一行的位置信息
-                                if i + 1 < len(lines):
-                                    pos_line = lines[i + 1].strip()
-                                    if '位置:' in pos_line:
-                                        pos_str = pos_line.split('位置:')[-1].strip()
-                                        # 解析坐标 x1,y1,x2,y2
-                                        coords = [int(x.strip()) for x in pos_str.split(',')]
-                                        if len(coords) == 4:
-                                            news_blocks.append({
-                                                'title': title,
-                                                'position': coords
-                                            })
+                            # 查找下一行的位置信息
+                            if i + 1 < len(lines):
+                                pos_line = lines[i + 1].strip()
+                                if '位置:' in pos_line:
+                                    pos_str = pos_line.split('位置:')[-1].strip()
+                                    # 解析坐标 x1,y1,x2,y2
+                                    coords = [int(x.strip()) for x in pos_str.split(',')]
+                                    if len(coords) == 4:
+                                        news_blocks.append({
+                                            'title': title,
+                                            'position': coords
+                                        })
                         except Exception as e:
                             print(f"解析新闻块行失败: {e}")
                             continue
