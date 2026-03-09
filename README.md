@@ -9,6 +9,7 @@
 - **结果保存**: 自动保存分析结果，支持重复加载
 - **图片导出**: 支持导出图片到指定目录
 - **代理支持**: 支持通过代理服务器访问 API
+- **新闻块标识**: 自动识别并标识报纸头版新闻块位置
 
 ## 环境要求
 
@@ -18,7 +19,7 @@
 ## 安装依赖
 
 ```bash
-pip install requests Pillow google-api-python-client
+pip install requests Pillow
 ```
 
 ## 配置文件 (config.json)
@@ -52,6 +53,8 @@ pip install requests Pillow google-api-python-client
 ```
 project/
 ├── main.py                 # 主程序
+├── run.py                  # 命令行启动文件 (Python)
+├── run.bat                 # Windows批处理启动文件 (Windows双击运行)
 ├── config.json            # 配置文件
 ├── downloaded_images/     # 下载的图片
 ├── analysis_results/      # 分析结果
@@ -61,18 +64,31 @@ project/
 ## 使用方法
 
 1. 修改 `config.json` 中的 API Key 和代理设置
-2. 运行程序: `python main.py`
+2. 运行程序: 
+   - Windows: 双击 `run.bat`
+   - 或使用命令行: `python run.py`
+   - 或直接运行: `python main.py`
 3. 点击"下载华尔街日报"或"下载金融时报"按钮下载图片
 4. 选择图片后点击"分析图片"进行分析
 5. 分析结果自动保存，下次点击图片时自动加载
+6. 新闻块位置会自动标识在图片预览上
 
 ## 运行
 
+### 方式一：Windows 批处理（推荐）
+双击 `run.bat` 即可启动
+
+### 方式二：Python 脚本
+```bash
+python run.py
+```
+
+### 方式三：直接运行主程序
 ```bash
 python main.py
 ```
 
 程序启动后默认全屏显示，包含左右布局：
 - 左侧：图片列表
-- 中间：图片预览
+- 中间：图片预览（带新闻块标识）
 - 右侧：分析结果
