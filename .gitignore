@@ -44,7 +44,7 @@ analysis_results/
 *.jpeg
 *.png
 *.gif
-*.txt
+!prompt.txt
 
 # Config (contains sensitive API key)
 config.json

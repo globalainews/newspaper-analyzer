@@ -52,6 +52,19 @@ class EnhancedKioskoDownloader:
         try:
             with open('config.json', 'r', encoding='utf-8') as f:
                 self.config = json.load(f)
+            
+            # 从文件加载分析提示词
+            prompt_file = self.config.get('analysis_prompt_file', 'prompt.txt')
+            if os.path.exists(prompt_file):
+                try:
+                    with open(prompt_file, 'r', encoding='utf-8') as f:
+                        self.config['analysis_prompt'] = f.read()
+                except Exception as e:
+                    print(f"警告：无法加载提示词文件 {prompt_file}: {e}")
+                    self.config['analysis_prompt'] = "请分析这张报纸首页图片。"
+            else:
+                self.config['analysis_prompt'] = "请分析这张报纸首页图片。"
+                
         except FileNotFoundError:
             # 创建默认配置
             self.config = {
@@ -63,7 +76,7 @@ class EnhancedKioskoDownloader:
                         "port": 1080
                     }
                 },
-                "analysis_prompt": "请分析这张报纸首页图片，重点关注以下内容：\n\n1. 主要新闻标题和主题\n2. 重要的财经数据和市场信息\n3. 商业和金融领域的重点报道\n4. 国际新闻和重要事件\n5. 图片中的关键图表和数据可视化\n\n请用中文回答，分析要详细且专业。",
+                "analysis_prompt_file": "prompt.txt",
                 "download_settings": {
                     "save_directory": "downloaded_images",
                     "image_quality": "750"
@@ -483,12 +496,10 @@ class EnhancedKioskoDownloader:
         selection = self.image_listbox.curselection()
         if selection:
             filename = self.image_listbox.get(selection[0])
-            filepath = os.path.join(self.download_dir, filename)
-            self.show_image_preview(filepath)
             self.load_analysis_result(filename)
     
-    def show_image_preview(self, filepath):
-        """显示图片预览 - Canvas版本"""
+    def show_image_preview(self, filepath, news_blocks=None):
+        """显示图片预览 - Canvas版本，支持绘制新闻块矩形框"""
         try:
             # 加载图片
             image = Image.open(filepath)
@@ -518,11 +529,41 @@ class EnhancedKioskoDownloader:
             self.preview_canvas.delete("all")
             
             # 计算居中位置
-            x = (canvas_width - new_size[0]) // 2
-            y = (canvas_height - new_size[1]) // 2
+            x_offset = (canvas_width - new_size[0]) // 2
+            y_offset = (canvas_height - new_size[1]) // 2
             
             # 在画布上绘制图片
-            self.preview_canvas.create_image(x, y, anchor=tk.NW, image=self.preview_photo)
+            self.preview_canvas.create_image(x_offset, y_offset, anchor=tk.NW, image=self.preview_photo)
+            
+            # 绘制新闻块矩形框
+            if news_blocks:
+                colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', 
+                          '#FF8800', '#8800FF', '#0088FF', '#88FF00']
+                for i, block in enumerate(news_blocks):
+                    try:
+                        x1, y1, x2, y2 = block['position']
+                        # 缩放坐标
+                        x1_scaled = x_offset + int(x1 * ratio)
+                        y1_scaled = y_offset + int(y1 * ratio)
+                        x2_scaled = x_offset + int(x2 * ratio)
+                        y2_scaled = y_offset + int(y2 * ratio)
+                        
+                        color = colors[i % len(colors)]
+                        # 绘制矩形框
+                        self.preview_canvas.create_rectangle(
+                            x1_scaled, y1_scaled, x2_scaled, y2_scaled,
+                            outline=color, width=2, tags=f'news_block_{i}'
+                        )
+                        # 绘制标签
+                        label_y = y1_scaled - 20 if y1_scaled - 20 > 0 else y1_scaled
+                        self.preview_canvas.create_text(
+                            x1_scaled + 5, label_y,
+                            text=f"{i+1}. {block['title'][:10]}...",
+                            fill=color, font=("Microsoft YaHei", 9, "bold"),
+                            anchor=tk.SW
+                        )
+                    except Exception as e:
+                        print(f"绘制新闻块 {i} 失败: {e}")
             
         except Exception as e:
             self.preview_canvas.delete("all")
@@ -531,22 +572,77 @@ class EnhancedKioskoDownloader:
                 font=("Microsoft YaHei", 11), fill='#E74C3C'
             )
     
+    def parse_news_blocks(self, content):
+        """解析分析结果中的新闻块位置信息"""
+        news_blocks = []
+        try:
+            # 查找【新闻块位置信息】部分
+            news_block_section = None
+            lines = content.split('\n')
+            
+            # 寻找新闻块位置信息的开始
+            in_news_blocks = False
+            for i, line in enumerate(lines):
+                if '【新闻块位置信息】' in line:
+                    in_news_blocks = True
+                    continue
+                
+                if in_news_blocks:
+                    # 检查是否到达新的部分
+                    if line.strip().startswith('---') or (line.strip().startswith('【') and '新闻块位置信息' not in line):
+                        break
+                    
+                    # 解析新闻块
+                    if line.strip().startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.')):
+                        try:
+                            # 解析新闻标题
+                            title_line = line.strip()
+                            if '新闻标题:' in title_line:
+                                title = title_line.split('新闻标题:')[-1].strip()
+                                
+                                # 查找下一行的位置信息
+                                if i + 1 < len(lines):
+                                    pos_line = lines[i + 1].strip()
+                                    if '位置:' in pos_line:
+                                        pos_str = pos_line.split('位置:')[-1].strip()
+                                        # 解析坐标 x1,y1,x2,y2
+                                        coords = [int(x.strip()) for x in pos_str.split(',')]
+                                        if len(coords) == 4:
+                                            news_blocks.append({
+                                                'title': title,
+                                                'position': coords
+                                            })
+                        except Exception as e:
+                            print(f"解析新闻块行失败: {e}")
+                            continue
+        except Exception as e:
+            print(f"解析新闻块位置信息失败: {e}")
+        
+        return news_blocks
+    
     def load_analysis_result(self, filename):
         """加载已保存的分析结果"""
         base_name = os.path.splitext(filename)[0]
         analysis_file = os.path.join(self.analysis_dir, f"{base_name}.txt")
         
         self.result_text.delete(1.0, tk.END)
+        news_blocks = []
         
         if os.path.exists(analysis_file):
             try:
                 with open(analysis_file, 'r', encoding='utf-8') as f:
                     content = f.read()
                 self.result_text.insert(tk.END, content)
+                # 解析新闻块位置信息
+                news_blocks = self.parse_news_blocks(content)
             except Exception as e:
                 self.result_text.insert(tk.END, f"读取分析结果失败: {str(e)}")
         else:
             self.result_text.insert(tk.END, "暂无分析结果\n\n点击\"分析图片\"按钮开始分析")
+        
+        # 更新图片预览，显示新闻块矩形框
+        filepath = os.path.join(self.download_dir, filename)
+        self.show_image_preview(filepath, news_blocks)
     
     def analyze_image(self):
         """分析选中的图片"""
@@ -627,6 +723,10 @@ class EnhancedKioskoDownloader:
             self.result_text.insert(tk.END, f"图片分析结果 - {filename}\n")
             self.result_text.insert(tk.END, "=" * 50 + "\n\n")
             self.result_text.insert(tk.END, result_text)
+            
+            # 解析新闻块位置信息并在图片预览上绘制矩形框
+            news_blocks = self.parse_news_blocks(result_text)
+            self.show_image_preview(filepath, news_blocks)
             
             messagebox.showinfo("分析完成", f"图片分析完成!\n\n结果已保存到:\n{analysis_file}")
             
