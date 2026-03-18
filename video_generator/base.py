@@ -20,7 +20,7 @@ class VideoGeneratorBase:
         self.download_dir = self.config['download_settings']['save_directory']
         self.current_image_file = None
         # 剪映草稿文件夹配置
-        self.jianying_drafts_dir = self.config.get('jianying_settings', {}).get('drafts_directory', 'F:/剪映5.9/JianyingPro Drafts')
+        self.jianying_drafts_dir = self.config.get('jianying_settings', {}).get('drafts_directory', 'E:/剪映5.9/JianyingPro Drafts')
     
     def set_news_listbox(self, news_listbox):
         self.news_listbox = news_listbox

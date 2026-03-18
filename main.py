@@ -302,7 +302,8 @@ class EnhancedKioskoDownloader:
         self.news_listbox = tk.Listbox(list_container, font=("Microsoft YaHei", 10), 
                                        yscrollcommand=list_scroll.set, 
                                        bg='white', selectbackground='#3498DB',
-                                       selectforeground='white', borderwidth=0)
+                                       selectforeground='white', borderwidth=0,
+                                       selectmode=tk.EXTENDED)  # 添加多选模式
         self.news_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         list_scroll.config(command=self.news_listbox.yview)
         
@@ -328,7 +329,7 @@ class EnhancedKioskoDownloader:
         down_btn.pack(side=tk.LEFT, padx=5)
         
         # 删除按钮
-        delete_btn = tk.Button(edit_frame, text="🗑️ 删除", 
+        delete_btn = tk.Button(edit_frame, text="🗑️ 删除选中", 
                              font=("Microsoft YaHei", 9), bg='#E74C3C', fg='white',
                              relief=tk.FLAT, padx=8, pady=4, cursor='hand2',
                              command=lambda: self.video_generator.delete_news() if self.video_generator else None)

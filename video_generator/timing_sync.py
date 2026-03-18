@@ -104,9 +104,9 @@ class TimingSynchronizer:
                 text_segments.extend(track_segments)
             print(f"  总计获取到 {len(text_segments)} 个文本片段")
             
-            # 建立text_id到文本片段的映射
+            # 建立text_id到文本片段的映射（包含原始顺序）
             text_segment_map = {}
-            print(f"[步骤7] 建立text_id到文本片段的映射:")
+            print(f"[步骤7] 建立text_id到文本片段的映射（包含原始顺序）:")
             print(f"  TTS音频的text_id列表: {[tts.get('text_id') for tts in tts_audios]}")
             for idx, segment in enumerate(text_segments):
                 seg_id = segment.get('id')
@@ -118,7 +118,10 @@ class TimingSynchronizer:
                 # 输出文本片段的所有关键字段
                 print(f"  [文本-{idx+1}] id={seg_id}, start={start}, duration={duration}, text_to_audio_ids={text_to_audio_ids}, material_id={material_id}")
                 if seg_id:
-                    text_segment_map[seg_id] = segment
+                    text_segment_map[seg_id] = {
+                        'segment': segment,
+                        'original_order': idx  # 记录原始顺序
+                    }
             print(f"  共建立 {len(text_segment_map)} 个文本片段映射")
             print(f"  文本映射中的id列表: {list(text_segment_map.keys())}")
             
@@ -192,33 +195,32 @@ class TimingSynchronizer:
             print(f"  贴纸映射中的material_id列表: {list(sticker_segment_map.keys())}")
             
             # 按原始出现顺序排序TTS音频
-            # 根据文本片段的start时间排序
+            # 根据文本片段在轨道中的原始顺序排序
             print(f"[步骤10] 按原始出现顺序排序TTS音频:")
             tts_with_order = []
             for idx, tts in enumerate(tts_audios):
                 text_id = tts.get('text_id')
                 if text_id and text_id in text_segment_map:
-                    text_seg = text_segment_map[text_id]
-                    timerange = text_seg.get('target_timerange', {})
-                    start_time = timerange.get('start', 0)
+                    text_seg_info = text_segment_map[text_id]
+                    original_order = text_seg_info.get('original_order', idx)
                     tts_with_order.append({
                         **tts,
-                        'original_start': start_time
+                        'original_order': original_order
                     })
-                    print(f"  [TTS-{idx+1}] text_id={text_id}, original_start={start_time}")
+                    print(f"  [TTS-{idx+1}] text_id={text_id}, original_order={original_order}")
                 else:
-                    # 如果找不到对应的文本片段，使用0作为起始时间
+                    # 如果找不到对应的文本片段，使用当前索引作为原始顺序
                     tts_with_order.append({
                         **tts,
-                        'original_start': 0
+                        'original_order': idx
                     })
-                    print(f"  [TTS-{idx+1}] text_id={text_id}, 未找到对应文本片段，使用start=0")
-            
-            # 按原始起始时间排序
-            tts_with_order.sort(key=lambda x: x['original_start'])
+                    print(f"  [TTS-{idx+1}] text_id={text_id}, 未找到对应文本片段，使用original_order={idx}")
+
+            # 按原始顺序排序
+            tts_with_order.sort(key=lambda x: x['original_order'])
             print(f"[步骤11] 排序后的TTS音频顺序:")
             for idx, tts in enumerate(tts_with_order):
-                print(f"  [排序-{idx+1}] id={tts['id']}, text_id={tts['text_id']}, original_start={tts['original_start']}")
+                print(f"  [排序-{idx+1}] id={tts['id']}, text_id={tts['text_id']}, original_order={tts['original_order']}")
             
             # 重新计算TTS音频的时序
             # 间隔: 0.8秒 = 800,000微秒
@@ -303,7 +305,8 @@ class TimingSynchronizer:
             
             # 建立material_id到文本片段的映射
             material_to_text_map = {}
-            for seg_id, seg in text_segment_map.items():
+            for seg_id, seg_info in text_segment_map.items():
+                seg = seg_info.get('segment', {})
                 material_id = seg.get('material_id')
                 if material_id:
                     material_to_text_map[material_id] = seg
@@ -585,6 +588,61 @@ class TimingSynchronizer:
             print("=" * 60)
             print("TTS音频、字幕、贴纸和视频素材时序同步完成")
             print("=" * 60)
+            
+            # 补充：处理时间长度显示
+            print("[补充] 处理时间长度显示:")
+            
+            # 1. 找到id为7453700C-DD8B-44d8-91DA-05690591DCA9的文本片段
+            target_text_id = "7453700C-DD8B-44d8-91DA-05690591DCA9"
+            display_text_id = "4F5AEA3A-6BDF-4933-8DE1-EC31E979E97F"
+            
+            # 查找所有文本轨道中的片段
+            total_duration = 0
+            for track in text_tracks:
+                for segment in track.get('segments', []):
+                    material_id = segment.get('material_id')
+                    if material_id == target_text_id:
+                        # 获取时间长度（微秒）
+                        timerange = segment.get('target_timerange', {})
+                        duration_us = timerange.get('duration', 0)
+                        # 转换为秒并取整数
+                        total_duration = int(duration_us / 1000000)
+                        print(f"  找到目标文本片段，时长: {duration_us}微秒 = {total_duration}秒")
+                        break
+                if total_duration > 0:
+                    break
+            
+            # 2. 找到id为4F5AEA3A-6BDF-4933-8DE1-EC31E979E97F的文本片段并替换内容
+            if total_duration > 0:
+                # 查找materials中的texts
+                if 'materials' in data and 'texts' in data['materials']:
+                    for text_item in data['materials']['texts']:
+                        text_id = text_item.get('id')
+                        if text_id == display_text_id:
+                            # 替换content中的text
+                            content_str = text_item.get('content', '')
+                            if content_str:
+                                try:
+                                    content_obj = json.loads(content_str)
+                                    old_text = content_obj.get('text', '')
+                                    new_text = f"{total_duration}秒"
+                                    print(f"  替换前显示文本: {old_text}")
+                                    content_obj['text'] = new_text
+                                    text_item['content'] = json.dumps(content_obj, ensure_ascii=False)
+                                    print(f"  替换后显示文本: {new_text}")
+                                except json.JSONDecodeError:
+                                    # 如果解析失败，直接替换整个content
+                                    old_text = content_str
+                                    new_text = f"{total_duration}秒"
+                                    print(f"  替换前显示content: {old_text[:50]}...")
+                                    text_item['content'] = new_text
+                                    print(f"  替换后显示content: {new_text}")
+                            else:
+                                new_text = f"{total_duration}秒"
+                                text_item['content'] = new_text
+                                print(f"  显示content为空，设置为: {new_text}")
+                            break
+            
             return data
             
         except Exception as e:

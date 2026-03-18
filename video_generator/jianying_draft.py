@@ -137,6 +137,40 @@ class JianyingDraftManager:
                                     text_item['content'] = new_text
                                     print(f"第{i+1}条content为空，设置为: {new_text[:50]}...")
                         
+                        # 补充：替换id为7453700C-DD8B-44d8-91DA-05690591DCA9的TEXT内容为当前日期和星期
+                        for text_item in texts_list:
+                            text_id = text_item.get('id')
+                            if text_id == '7453700C-DD8B-44d8-91DA-05690591DCA9':
+                                # 获取当前日期和星期
+                                today = datetime.datetime.now()
+                                # 格式：2026年3月16日周一
+                                date_str = today.strftime('%Y年%m月%d日')
+                                # 获取星期几（1-7，1=周一）
+                                weekday = today.weekday() + 1
+                                weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+                                weekday_str = weekdays[weekday % 7]
+                                date_week_str = f"{date_str}{weekday_str}"
+                                
+                                # 替换content中的text
+                                content_str = text_item.get('content', '')
+                                if content_str:
+                                    try:
+                                        content_obj = json.loads(content_str)
+                                        old_text = content_obj.get('text', '')
+                                        print(f"替换前日期文本: {old_text}")
+                                        content_obj['text'] = date_week_str
+                                        text_item['content'] = json.dumps(content_obj, ensure_ascii=False)
+                                        print(f"替换后日期文本: {date_week_str}")
+                                    except json.JSONDecodeError:
+                                        # 如果解析失败，直接替换整个content
+                                        print(f"替换前日期content: {content_str[:50]}...")
+                                        text_item['content'] = date_week_str
+                                        print(f"替换后日期content: {date_week_str}")
+                                else:
+                                    text_item['content'] = date_week_str
+                                    print(f"日期content为空，设置为: {date_week_str}")
+                                break
+                        
                         # 保存修改后的JSON文件
                         with open(draft_content_file, 'w', encoding='utf-8') as f:
                             json.dump(draft_content, f, ensure_ascii=False, indent=2)

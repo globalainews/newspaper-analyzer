@@ -118,20 +118,30 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
             self.show_info("提示", "已经是最后一条新闻")
     
     def delete_news(self):
-        """删除选中的新闻"""
-        if self.current_news_index >= 0 and self.current_news_index < len(self.video_data):
-            if messagebox.askyesno("确认删除", "确定要删除这条新闻吗?"):
-                del self.video_data[self.current_news_index]
-                
-                # 更新ID
-                for i, news in enumerate(self.video_data):
-                    news['id'] = i + 1
-                
-                self.update_news_list()
-                self.current_news_index = -1
-                self.show_info("成功", "新闻已删除!")
-        else:
+        """删除选中的新闻（支持多选）"""
+        if not self.news_listbox:
+            self.show_info("提示", "新闻列表未初始化")
+            return
+        
+        selection = self.news_listbox.curselection()
+        if not selection:
             self.show_info("提示", "请先选择要删除的新闻")
+            return
+        
+        selected_count = len(selection)
+        if messagebox.askyesno("确认删除", f"确定要删除选中的 {selected_count} 条新闻吗?"):
+            # 按索引倒序删除，避免索引变化问题
+            for index in sorted(selection, reverse=True):
+                if 0 <= index < len(self.video_data):
+                    del self.video_data[index]
+            
+            # 更新ID
+            for i, news in enumerate(self.video_data):
+                news['id'] = i + 1
+            
+            self.update_news_list()
+            self.current_news_index = -1
+            self.show_info("成功", f"已删除 {selected_count} 条新闻!")
     
     def export_news_images(self):
         """导出新闻图片"""
