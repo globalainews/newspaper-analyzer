@@ -137,6 +137,33 @@ class TimingSynchronizer:
                 sticker_segments.extend(track.get('segments', []))
             print(f"[步骤9] 从所有贴纸轨道中获取到 {len(sticker_segments)} 个贴纸片段")
             
+            # 收集所有text_to_audio类型的音频片段（不管属于哪个track）
+            print(f"[步骤8.5] 收集并排序text_to_audio类型的音频片段:")
+            text_to_audio_segments = []
+            tts_ids = [tts.get('id') for tts in tts_audios]
+            print(f"  TTS音频ID列表: {tts_ids}")
+            
+            for idx, segment in enumerate(audio_segments):
+                material_id = segment.get('material_id')
+                if material_id and material_id in tts_ids:
+                    timerange = segment.get('target_timerange', {})
+                    start = timerange.get('start', 0)
+                    duration = timerange.get('duration', 0)
+                    text_to_audio_segments.append({
+                        'segment': segment,
+                        'start': start,
+                        'duration': duration,
+                        'material_id': material_id
+                    })
+                    print(f"  [TTS音频片段-{len(text_to_audio_segments)}] material_id={material_id}, start={start}, duration={duration}")
+            
+            # 按开始时间排序
+            text_to_audio_segments.sort(key=lambda x: x['start'])
+            print(f"  排序后的text_to_audio音频片段顺序:")
+            for idx, item in enumerate(text_to_audio_segments):
+                print(f"  [排序-{idx+1}] material_id={item['material_id']}, start={item['start']}, duration={item['duration']}")
+            print(f"  共 {len(text_to_audio_segments)} 个text_to_audio音频片段")
+            
             # 建立material_id到音频片段的映射（一个material_id可能对应多个片段）
             audio_segment_map = {}
             print(f"[步骤9] 建立material_id到音频片段的映射:")
@@ -194,33 +221,32 @@ class TimingSynchronizer:
             print(f"  共建立 {len(sticker_segment_map)} 个material_id映射")
             print(f"  贴纸映射中的material_id列表: {list(sticker_segment_map.keys())}")
             
-            # 按原始出现顺序排序TTS音频
-            # 根据文本片段在轨道中的原始顺序排序
-            print(f"[步骤10] 按原始出现顺序排序TTS音频:")
+            # 按text_to_audio音频片段的开始时间排序
+            print(f"[步骤10] 按text_to_audio音频片段的开始时间排序:")
+            
+            # 建立tts_id到原始开始时间的映射
+            tts_id_to_original_start = {}
+            for item in text_to_audio_segments:
+                material_id = item.get('material_id')
+                start = item.get('start', 0)
+                tts_id_to_original_start[material_id] = start
+            
+            # 为TTS音频添加原始开始时间
             tts_with_order = []
             for idx, tts in enumerate(tts_audios):
-                text_id = tts.get('text_id')
-                if text_id and text_id in text_segment_map:
-                    text_seg_info = text_segment_map[text_id]
-                    original_order = text_seg_info.get('original_order', idx)
-                    tts_with_order.append({
-                        **tts,
-                        'original_order': original_order
-                    })
-                    print(f"  [TTS-{idx+1}] text_id={text_id}, original_order={original_order}")
-                else:
-                    # 如果找不到对应的文本片段，使用当前索引作为原始顺序
-                    tts_with_order.append({
-                        **tts,
-                        'original_order': idx
-                    })
-                    print(f"  [TTS-{idx+1}] text_id={text_id}, 未找到对应文本片段，使用original_order={idx}")
+                tts_id = tts.get('id')
+                original_start = tts_id_to_original_start.get(tts_id, 0)
+                tts_with_order.append({
+                    **tts,
+                    'original_start': original_start
+                })
+                print(f"  [TTS-{idx+1}] id={tts_id}, original_start={original_start}")
 
-            # 按原始顺序排序
-            tts_with_order.sort(key=lambda x: x['original_order'])
+            # 按原始开始时间排序
+            tts_with_order.sort(key=lambda x: x['original_start'])
             print(f"[步骤11] 排序后的TTS音频顺序:")
             for idx, tts in enumerate(tts_with_order):
-                print(f"  [排序-{idx+1}] id={tts['id']}, text_id={tts['text_id']}, original_order={tts['original_order']}")
+                print(f"  [排序-{idx+1}] id={tts['id']}, text_id={tts['text_id']}, original_start={tts['original_start']}")
             
             # 重新计算TTS音频的时序
             # 间隔: 0.8秒 = 800,000微秒
@@ -252,50 +278,41 @@ class TimingSynchronizer:
             print(f"  最后一个音频的结束时间: {current_time - gap_us} (不包含0.8秒间隔)")
             print(f"  视频素材开始时间: {video_start_time} (包含0.8秒间隔)")
             
-            # 更新音频轨道中的TTS片段
+            # 更新音频轨道中的TTS片段（按照排序后的text_to_audio音频片段顺序）
             print(f"[步骤14] 更新音频轨道中的TTS片段:")
             print(f"  音频映射中的material_id列表: {list(audio_segment_map.keys())}")
             print(f"  使用TTS音频的id进行匹配")
             update_count = 0
-            for idx, timing in enumerate(new_timing):
-                # 使用TTS音频的id（不是resource_id）来匹配音频片段的material_id
+            
+            # 建立tts_id到timing的映射
+            tts_id_to_timing = {}
+            for timing in new_timing:
                 tts_id = timing.get('id')
-                print(f"  [处理-{idx+1}] 查找tts_id={tts_id}")
-                if tts_id and tts_id in audio_segment_map:
-                    # 获取该material_id对应的所有音频片段
-                    audio_segs = audio_segment_map[tts_id]
-                    print(f"    找到 {len(audio_segs)} 个匹配片段")
-                    # 如果只有一个片段，直接更新；如果有多个，按顺序更新
-                    if len(audio_segs) == 1:
-                        audio_seg = audio_segs[0]
-                        old_start = audio_seg.get('target_timerange', {}).get('start', 0)
-                        old_duration = audio_seg.get('target_timerange', {}).get('duration', 0)
-                        # 更新target_timerange
-                        if 'target_timerange' not in audio_seg:
-                            audio_seg['target_timerange'] = {}
-                        audio_seg['target_timerange']['start'] = timing.get('new_start', 0)
-                        audio_seg['target_timerange']['duration'] = timing.get('new_duration', 0)
-                        update_count += 1
-                        print(f"  [音频更新-{update_count}] tts_id={tts_id}")
-                        print(f"    旧: start={old_start}, duration={old_duration}")
-                        print(f"    新: start={timing.get('new_start')}, duration={timing.get('new_duration')}")
-                    elif len(audio_segs) > 1:
-                        # 如果有多个片段，需要找到与当前TTS匹配的片段
-                        # 这里简化处理：更新所有匹配的片段
-                        for seg_idx, audio_seg in enumerate(audio_segs):
-                            old_start = audio_seg.get('target_timerange', {}).get('start', 0)
-                            old_duration = audio_seg.get('target_timerange', {}).get('duration', 0)
-                            if 'target_timerange' not in audio_seg:
-                                audio_seg['target_timerange'] = {}
-                            audio_seg['target_timerange']['start'] = timing.get('new_start', 0)
-                            audio_seg['target_timerange']['duration'] = timing.get('new_duration', 0)
-                            update_count += 1
-                            print(f"  [音频更新-{update_count}] tts_id={tts_id}, 片段{seg_idx+1}/{len(audio_segs)}")
-                            print(f"    旧: start={old_start}, duration={old_duration}")
-                            print(f"    新: start={timing.get('new_start')}, duration={timing.get('new_duration')}")
-                else:
-                    print(f"  [音频跳过-{idx+1}] tts_id={tts_id} 未在音频片段映射中找到")
-                    print(f"    可用的material_id: {list(audio_segment_map.keys())}")
+                if tts_id:
+                    tts_id_to_timing[tts_id] = timing
+            
+            # 按照排序后的text_to_audio音频片段顺序进行处理
+            for idx, item in enumerate(text_to_audio_segments):
+                segment = item['segment']
+                material_id = segment.get('material_id')
+                
+                # 检查这个音频片段是否是TTS音频
+                if material_id and material_id in tts_id_to_timing:
+                    timing = tts_id_to_timing[material_id]
+                    old_start = segment.get('target_timerange', {}).get('start', 0)
+                    old_duration = segment.get('target_timerange', {}).get('duration', 0)
+                    
+                    # 更新target_timerange
+                    if 'target_timerange' not in segment:
+                        segment['target_timerange'] = {}
+                    segment['target_timerange']['start'] = timing.get('new_start', 0)
+                    segment['target_timerange']['duration'] = timing.get('new_duration', 0)
+                    
+                    update_count += 1
+                    print(f"  [音频更新-{update_count}] material_id={material_id}")
+                    print(f"    旧: start={old_start}, duration={old_duration}")
+                    print(f"    新: start={timing.get('new_start')}, duration={timing.get('new_duration')}")
+                
             print(f"  共更新 {update_count} 个音频片段")
             
             # 更新文本轨道中的字幕片段
