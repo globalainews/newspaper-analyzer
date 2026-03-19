@@ -7,7 +7,7 @@ import os
 from downloader import NewspaperDownloader
 from analyzer import ImageAnalyzer
 from video_generator.main import VideoGenerator
-from utils import load_config, export_image, refresh_image_list
+from utils import load_config, refresh_image_list
 
 
 class EnhancedKioskoDownloader:
@@ -44,7 +44,7 @@ class EnhancedKioskoDownloader:
             self.progress_bar,
             self.root
         )
-        self.video_generator.set_news_listbox(self.news_listbox)
+        self.video_generator.set_news_listbox(self.news_frame)
         self.video_generator.preview_canvas = self.video_preview_canvas
         
         gemini_status = "✅ Gemini已连接" if self.analyzer.gemini_available else "❌ Gemini未配置"
@@ -168,9 +168,14 @@ class EnhancedKioskoDownloader:
         btn_frame.pack(fill=tk.X, padx=10, pady=(0, 5))
         
         refresh_btn = tk.Button(btn_frame, text="🔄 刷新列表", command=self.on_refresh_list,
-                              font=("Microsoft YaHei", 10), bg='#3498DB', fg='white',
+                              font=('Microsoft YaHei', 10), bg='#3498DB', fg='white',
                               relief=tk.FLAT, padx=10, pady=5, cursor='hand2')
         refresh_btn.pack(side=tk.LEFT)
+        
+        download_btn = tk.Button(btn_frame, text="💾 下载图片", command=self.on_download_image,
+                              font=('Microsoft YaHei', 10), bg='#27AE60', fg='white',
+                              relief=tk.FLAT, padx=10, pady=5, cursor='hand2')
+        download_btn.pack(side=tk.LEFT, padx=(5, 0))
         
         generate_prompt_btn = tk.Button(btn_frame, text="📝 生成Prompt", command=self.on_generate_prompt,
                                font=('Microsoft YaHei', 10), bg='#F39C12', fg='white',
@@ -181,11 +186,6 @@ class EnhancedKioskoDownloader:
                                font=('Microsoft YaHei', 10), bg='#9B59B6', fg='white',
                                relief=tk.FLAT, padx=10, pady=5, cursor='hand2')
         analyze_btn.pack(side=tk.RIGHT, padx=(5, 0))
-        
-        export_btn = tk.Button(btn_frame, text="📤 导出图片", command=self.on_export_click,
-                              font=('Microsoft YaHei', 10), bg='#27AE60', fg='white',
-                              relief=tk.FLAT, padx=10, pady=5, cursor='hand2')
-        export_btn.pack(side=tk.RIGHT, padx=(5, 0))
         
         right_frame = tk.Frame(analysis_paned)
         analysis_paned.add(right_frame, minsize=500)
@@ -285,30 +285,42 @@ class EnhancedKioskoDownloader:
         main_paned = tk.PanedWindow(self.video_frame, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=4)
         main_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        left_frame = tk.Frame(main_paned, width=450)
-        main_paned.add(left_frame, minsize=450)
+        left_frame = tk.Frame(main_paned, width=600)
+        main_paned.add(left_frame, minsize=600)
         
         title_frame = tk.Frame(left_frame, bg='#2C3E50')
         title_frame.pack(fill=tk.X)
         tk.Label(title_frame, text="📰 新闻编辑", font=("Microsoft YaHei", 12, "bold"), 
                 bg='#2C3E50', fg='white').pack(pady=8)
         
-        list_container = tk.Frame(left_frame, bg='#BDC3C7', relief=tk.SUNKEN, bd=1)
-        list_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # 新闻编辑区域 - 使用多个文本框
+        news_container = tk.Frame(left_frame, bg='#BDC3C7', relief=tk.SUNKEN, bd=1)
+        news_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        list_scroll = tk.Scrollbar(list_container)
-        list_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        # 滚动条
+        news_scroll = tk.Scrollbar(news_container)
+        news_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.news_listbox = tk.Listbox(list_container, font=("Microsoft YaHei", 10), 
-                                       yscrollcommand=list_scroll.set, 
-                                       bg='white', selectbackground='#3498DB',
-                                       selectforeground='white', borderwidth=0,
-                                       selectmode=tk.EXTENDED)  # 添加多选模式
-        self.news_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        list_scroll.config(command=self.news_listbox.yview)
+        # 使用Canvas来实现滚动
+        self.news_canvas = tk.Canvas(news_container, yscrollcommand=news_scroll.set)
+        self.news_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        self.news_listbox.bind('<<ListboxSelect>>', self.on_news_select)
-        self.news_listbox.bind('<Double-1>', self.on_news_double_click)
+        # 内部框架，用于放置文本框
+        self.news_frame = tk.Frame(self.news_canvas)
+        self.news_canvas.create_window((0, 0), window=self.news_frame, anchor='nw')
+        
+        # 配置滚动条
+        news_scroll.config(command=self.news_canvas.yview)
+        
+        # 绑定事件以更新滚动区域
+        def update_scrollregion(event):
+            self.news_canvas.configure(scrollregion=self.news_canvas.bbox('all'))
+        
+        self.news_frame.bind('<Configure>', update_scrollregion)
+        
+        # 存储新闻文本框和选择状态
+        self.news_textboxes = []
+        self.news_selections = []
         
         # 操作按钮
         edit_frame = tk.Frame(left_frame, bg='#ECF0F1')
@@ -349,20 +361,14 @@ class EnhancedKioskoDownloader:
                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
                            command=lambda: self.video_generator.save_video_data() if self.video_generator else None)
         save_btn.pack(side=tk.LEFT, padx=5)
-        
-        export_btn = tk.Button(btn_frame, text="📤 导出图片", 
-                              font=('Microsoft YaHei', 10), bg='#9B59B6', fg='white',
-                              relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
-                              command=lambda: self.video_generator.export_news_images() if self.video_generator else None)
-        export_btn.pack(side=tk.LEFT, padx=5)
-        
-        # 区域选择按钮
-        select_btn = tk.Button(btn_frame, text="🎯 区域选择", 
-                              font=('Microsoft YaHei', 10), bg='#3498DB', fg='white',
-                              relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
-                              command=lambda: self.video_generator.enable_region_selection() if self.video_generator else None)
-        select_btn.pack(side=tk.LEFT, padx=5)
-        
+
+        # 加载CosyVoice模型按钮
+        load_model_btn = tk.Button(btn_frame, text="🔊 加载模型",
+                            font=("Microsoft YaHei", 10), bg='#16A085', fg='white',
+                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
+                            command=lambda: self.video_generator.load_cosyvoice_model() if self.video_generator else None)
+        load_model_btn.pack(side=tk.LEFT, padx=5)
+
         # 生成剪映草稿按钮
         jianying_btn = tk.Button(btn_frame, text="🎬 剪映草稿", 
                                font=("Microsoft YaHei", 10), bg='#F39C12', fg='white',
@@ -377,12 +383,12 @@ class EnhancedKioskoDownloader:
                            command=lambda: self.video_generator.process_jianying_draft_timing() if self.video_generator else None)
         sync_btn.pack(side=tk.RIGHT, padx=5)
         
-        video_btn = tk.Button(btn_frame, text="🎬 生成视频", 
+        video_btn = tk.Button(btn_frame, text="🎬 生成视频",
                             font=("Microsoft YaHei", 10), bg='#E74C3C', fg='white',
                             relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
                             command=lambda: self.video_generator.generate_video() if self.video_generator else None)
         video_btn.pack(side=tk.RIGHT)
-        
+
         right_frame = tk.Frame(main_paned)
         main_paned.add(right_frame, minsize=450)
         
@@ -518,21 +524,38 @@ class EnhancedKioskoDownloader:
         filename = self.image_listbox.get(selection[0])
         self.analyzer.analyze_image(filename, self.download_dir)
     
-    def on_export_click(self):
+    def on_download_image(self):
+        """下载选中的图片到导出目录"""
         selection = self.image_listbox.curselection()
         if not selection:
             messagebox.showwarning("警告", "请先选择一张图片")
             return
         
         filename = self.image_listbox.get(selection[0])
-        source_filepath = os.path.join(self.download_dir, filename)
-        export_dir = self.config.get('export_settings', {}).get('export_directory', 'E:\中文听见\报纸头版')
+        source_path = os.path.join(self.download_dir, filename)
         
-        success, message = export_image(source_filepath, export_dir, filename)
-        if success:
-            messagebox.showinfo("导出成功", message)
+        # 确定导出目录
+        export_dir = self.config.get('export_settings', {}).get('export_directory', 'export')
+        os.makedirs(export_dir, exist_ok=True)
+        
+        # 根据文件名确定报纸类型和目标文件名
+        import re
+        if 'wsj' in filename.lower() or 'wall street journal' in filename.lower():
+            target_filename = '华尔街日报0318.jpg'
+        elif 'ft' in filename.lower() or 'financial times' in filename.lower():
+            target_filename = '金融时报0318.jpg'
         else:
-            messagebox.showerror("导出失败", message)
+            messagebox.showwarning("警告", "无法识别报纸类型")
+            return
+        
+        target_path = os.path.join(export_dir, target_filename)
+        
+        try:
+            import shutil
+            shutil.copy2(source_path, target_path)
+            messagebox.showinfo("成功", f"图片已下载到：{target_path}")
+        except Exception as e:
+            messagebox.showerror("错误", f"下载失败：{str(e)}")
     
     def on_generate_prompt(self):
         """生成prompt并保存到prompt.txt"""

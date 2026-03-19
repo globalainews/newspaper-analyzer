@@ -7,10 +7,51 @@ import shutil
 import datetime
 import tkinter as tk
 from tkinter import messagebox
+
+# 导入语音克隆模块
+try:
+    from voice_clone import clone_voices_for_draft, VoiceCloner, get_cosyvoice_cloner
+    VOICE_CLONE_AVAILABLE = True
+except ImportError:
+    VOICE_CLONE_AVAILABLE = False
+    print("警告: 语音克隆模块未找到，语音生成功能将不可用")
+
+
 class JianyingDraftManager:
     def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
         pass
-    
+
+    def load_cosyvoice_model(self):
+        """加载CosyVoice模型"""
+        if not VOICE_CLONE_AVAILABLE:
+            self.show_error("错误", "语音克隆模块不可用")
+            return False
+
+        try:
+            self.update_progress("正在加载CosyVoice模型...", 0)
+            cloner = get_cosyvoice_cloner(self.config)
+
+            if cloner.model_loaded:
+                self.show_info("模型状态", "CosyVoice模型已经加载")
+                self.update_progress("模型已加载", 100)
+                return True
+
+            success = cloner.load_model()
+            if success:
+                self.update_progress("模型加载完成", 100)
+                return True
+            else:
+                self.show_error("错误", "CosyVoice模型加载失败")
+                self.update_progress("模型加载失败", 0)
+                return False
+
+        except Exception as e:
+            print(f"加载CosyVoice模型失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.show_error("错误", f"加载CosyVoice模型失败: {str(e)}")
+            return False
+
     def generate_jianying_draft(self):
         """生成剪映草稿目录"""
         try:
@@ -181,6 +222,45 @@ class JianyingDraftManager:
                             self.show_info("成功", f"剪映草稿文本已更新!\n\n目录: {draft_dir}")
                         else:
                             self.show_info("成功", f"剪映草稿目录生成完成!\n\n目录: {draft_dir}")
+                        
+                        # 生成语音文件
+                        print("\n" + "=" * 60)
+                        print("开始生成语音文件...")
+                        print("=" * 60)
+                        
+                        if VOICE_CLONE_AVAILABLE:
+                            try:
+                                # 获取参考音频路径
+                                reference_audio = None
+                                cosyvoice_config = self.config.get('cosyvoice', {})
+                                if 'reference_audio' in cosyvoice_config:
+                                    reference_audio = cosyvoice_config['reference_audio']
+                                
+                                # 调用语音克隆
+                                generated_files = clone_voices_for_draft(
+                                    draft_dir,
+                                    self.video_data,
+                                    self.config,
+                                    reference_audio
+                                )
+                                
+                                if generated_files:
+                                    print(f"\n语音生成完成! 共生成 {len(generated_files)} 个音频文件")
+                                    for gf in generated_files:
+                                        print(f"  - {gf['filename']}")
+                                else:
+                                    print("警告: 没有生成任何语音文件")
+                                    
+                            except Exception as e:
+                                print(f"生成语音文件失败: {str(e)}")
+                                import traceback
+                                traceback.print_exc()
+                        else:
+                            print("警告: 语音克隆模块不可用，跳过语音生成")
+                        
+                        print("=" * 60)
+                        print("剪映草稿处理完成!")
+                        print("=" * 60)
                     else:
                         print(f"警告: draft_content.json中没有找到texts字段")
                         print(f"JSON结构: {str(draft_content)[:500]}...")  # 输出部分JSON结构帮助调试

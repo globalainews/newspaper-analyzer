@@ -5,9 +5,158 @@ import copy
 import json
 import os
 import datetime
+
 class TimingSynchronizer:
     def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
-        pass
+        self.config = config
+        self.progress_label_widget = progress_label_widget
+        self.progress_bar_widget = progress_bar_widget
+        self.root = root
+    
+    def sync_audio_durations(self, draft_dir, draft_content):
+        """
+        同步语音文件时长到草稿素材
+        
+        功能:
+        1. 查看textReading目录下的audio*.wav文件
+        2. 获取每个语音文件的实际时长
+        3. 更新draft_content.json中audios素材的duration
+        
+        Args:
+            draft_dir: 剪映草稿目录路径
+            draft_content: 剪映草稿JSON数据
+            
+        Returns:
+            修改后的draft_content
+        """
+        print("=" * 60)
+        print("开始同步语音文件时长...")
+        print("=" * 60)
+        
+        text_reading_dir = os.path.join(draft_dir, 'textReading')
+        print(f"[调试] textReading目录: {text_reading_dir}")
+        print(f"[调试] 目录是否存在: {os.path.exists(text_reading_dir)}")
+        
+        # 检查textReading目录是否存在
+        if not os.path.exists(text_reading_dir):
+            print(f"[警告] textReading目录不存在: {text_reading_dir}")
+            return draft_content
+        
+        # 查找所有audio*.wav文件
+        audio_files = []
+        for filename in os.listdir(text_reading_dir):
+            if filename.startswith('audio') and filename.endswith('.wav'):
+                audio_files.append(filename)
+        
+        audio_files.sort()  # 按文件名排序
+        
+        if not audio_files:
+            print(f"[警告] textReading目录下没有找到audio*.wav文件")
+            print(f"[调试] 目录内容: {os.listdir(text_reading_dir)}")
+            return draft_content
+        
+        print(f"[步骤1] 找到 {len(audio_files)} 个语音文件:")
+        
+        # 获取每个语音文件的时长
+        audio_durations = {}
+        
+        # 尝试使用soundfile读取
+        try:
+            import soundfile as sf
+            use_soundfile = True
+            print("[调试] 使用soundfile读取音频时长")
+        except ImportError:
+            use_soundfile = False
+            print("[调试] soundfile不可用，尝试使用wave")
+        
+        for audio_file in audio_files:
+            audio_path = os.path.join(text_reading_dir, audio_file)
+            try:
+                if use_soundfile:
+                    # 使用soundfile读取
+                    info = sf.info(audio_path)
+                    duration_seconds = info.duration
+                else:
+                    # 使用wave读取
+                    import wave
+                    with wave.open(audio_path, 'rb') as wf:
+                        frames = wf.getnframes()
+                        rate = wf.getframerate()
+                        duration_seconds = frames / float(rate)
+                
+                # 转换为微秒（项目使用微秒作为时间单位）
+                duration_us = int(duration_seconds * 1000000)
+                audio_durations[audio_file] = {
+                    'seconds': duration_seconds,
+                    'microseconds': duration_us
+                }
+                print(f"  {audio_file}: {duration_seconds:.2f}秒 ({duration_us}微秒)")
+            except Exception as e:
+                print(f"  [错误] 读取 {audio_file} 失败: {str(e)}")
+        
+        # 更新draft_content中的audios素材
+        materials = draft_content.get('materials', {})
+        audios = materials.get('audios', [])
+        
+        print(f"\n[步骤2] 匹配并更新audios素材...")
+        
+        updated_count = 0
+        for audio in audios:
+            audio_type = audio.get('type', '')
+            audio_name = audio.get('name', '')
+            audio_path = audio.get('path', '')
+            
+            if audio_type != 'text_to_audio':
+                continue
+            
+            matched_file = None
+            for audio_file in audio_durations:
+                base_name = audio_file.replace('.wav', '')
+                if base_name in audio_path:
+                    matched_file = audio_file
+                    break
+            
+            if matched_file:
+                old_duration = audio.get('duration', 0)
+                new_duration = audio_durations[matched_file]['microseconds']
+                duration_sec = audio_durations[matched_file]['seconds']
+                
+                audio['duration'] = new_duration
+                
+                print(f"  [更新] {audio_name}: {old_duration/1e6:.2f}秒 → {duration_sec:.2f}秒")
+                updated_count += 1
+        
+        print(f"\n共更新 {updated_count} 个音频素材的duration")
+
+        print(f"\n[步骤3] 同步segments中的source_timerange与target_timerange...")
+        tracks = draft_content.get('tracks', [])
+
+        for track in tracks:
+            segments = track.get('segments', [])
+            for segment in segments:
+                material_id = segment.get('material_id')
+                target_timerange = segment.get('target_timerange', {})
+                source_timerange = segment.get('source_timerange')
+
+                # 确保source_timerange是字典
+                if source_timerange is None:
+                    source_timerange = {}
+                    segment['source_timerange'] = source_timerange
+
+                target_duration = target_timerange.get('duration', 0)
+                source_duration = source_timerange.get('duration', 0)
+
+                if target_duration != source_duration and target_duration > 0:
+                    old_source_duration = source_duration
+                    source_timerange['duration'] = target_duration
+                    print(f"  [同步] material_id={material_id}: source_timerange.duration {old_source_duration} → {target_duration}")
+
+        print(f"\nsegments中的source_timerange同步完成")
+        print("=" * 60)
+        print("语音文件时长同步完成")
+        print("=" * 60)
+
+        return draft_content
     
     def sync_tts_and_subtitles(self, draft_content, news_data=None):
         """
@@ -35,6 +184,18 @@ class TimingSynchronizer:
         data = copy.deepcopy(draft_content)
         
         try:
+            # 获取当前图片的原始尺寸
+            orig_image_width = 1600  # 默认值
+            orig_image_height = 3200  # 默认值
+            if hasattr(self, 'current_image_file') and self.current_image_file:
+                try:
+                    from PIL import Image
+                    with Image.open(self.current_image_file) as img:
+                        orig_image_width, orig_image_height = img.size
+                        print(f"[信息] 图片原始尺寸: {orig_image_width}x{orig_image_height}")
+                except Exception as e:
+                    print(f"[警告] 无法读取图片尺寸: {e}")
+            
             # 获取materials中的audios
             materials = data.get('materials', {})
             audios = materials.get('audios', [])
@@ -407,25 +568,42 @@ class TimingSynchronizer:
                     sticker_seg['target_timerange']['start'] = timing.get('new_start', 0)
                     sticker_seg['target_timerange']['duration'] = timing.get('new_duration', 0)
                     
-                    # 定位贴纸到对应新闻矩形框的左下角
+                    # 使用transform方式定位贴纸到对应新闻矩形框的中心
                     if news_data and idx < len(news_data):
                         news = news_data[idx]
                         # 新闻位置格式: [x1, y1, x2, y2]
                         position = news.get('position', [0, 0, 0, 0])
                         if len(position) == 4:
                             x1, y1, x2, y2 = position
-                            # 计算左下角坐标 (x1, y2)
-                            sticker_x = x1
-                            sticker_y = y2
+                            # 计算新闻矩形框中心点
+                            news_center_x = (x1 + x2) / 2
+                            news_center_y = (y1 + y2) / 2
                             
-                            # 更新贴纸位置
-                            if 'position' not in sticker_seg:
-                                sticker_seg['position'] = {}
-                            sticker_seg['position']['x'] = sticker_x
-                            sticker_seg['position']['y'] = sticker_y
+                            # 获取报纸类型和配置
+                            newspaper_type = self._detect_newspaper_type(news)
+                            video_width, video_height = self._get_video_dimensions()
+                            paper_config = self._get_newspaper_config(newspaper_type)
                             
-                            print(f"  贴纸定位: 新闻矩形框左下角 ({sticker_x}, {sticker_y})")
+                            # 计算贴纸在视频中的transform位置（比例值）
+                            transform_x, transform_y = self._calculate_sticker_transform(
+                                news_center_x, news_center_y,
+                                paper_config, video_width, video_height,
+                                orig_image_width, orig_image_height
+                            )
+                            
+                            # 更新贴纸的transform
+                            if 'clip' not in sticker_seg:
+                                sticker_seg['clip'] = {}
+                            if 'transform' not in sticker_seg['clip']:
+                                sticker_seg['clip']['transform'] = {}
+                            
+                            sticker_seg['clip']['transform']['x'] = transform_x
+                            sticker_seg['clip']['transform']['y'] = transform_y
+                            
+                            print(f"  贴纸transform定位: x={transform_x:.6f}, y={transform_y:.6f}")
+                            print(f"  新闻中心点: ({news_center_x}, {news_center_y})")
                             print(f"  新闻位置: {position}")
+                            print(f"  报纸类型: {newspaper_type}")
                     
                     update_count += 1
                     print(f"  [贴纸更新-{update_count}] 顺序对应 TTS-{idx+1} -> 贴纸-{idx+1}")
@@ -559,14 +737,22 @@ class TimingSynchronizer:
                         material_name = material_info["name"]
                         material_type = material_info["type"]
                         
-                        print(f"[对齐] {material_name} (material_id: {material_id})")
+                        print(f"[对齐] {material_name} (material_id: {material_id}, type: {material_type})")
                         
                         # 在所有轨道中查找引用该素材的片段
                         found = False
+                        processed_segments = 0
+                        
                         for track_idx, track in enumerate(data.get('tracks', [])):
+                            track_type = track.get('type', 'unknown')
                             segments = track.get('segments', [])
+                            print(f"  检查轨道 {track_idx} (类型: {track_type})，包含 {len(segments)} 个片段")
+                            
                             for seg_idx, segment in enumerate(segments):
-                                if segment.get('material_id') == material_id:
+                                seg_material_id = segment.get('material_id')
+                                print(f"    片段 {seg_idx}: material_id={seg_material_id}")
+                                
+                                if seg_material_id == material_id:
                                     # 找到片段，调整duration使结束时间对齐
                                     old_start = segment.get('target_timerange', {}).get('start', 0)
                                     old_duration = segment.get('target_timerange', {}).get('duration', 0)
@@ -580,17 +766,28 @@ class TimingSynchronizer:
                                         segment['target_timerange'] = {}
                                     segment['target_timerange']['duration'] = new_duration
                                     
+                                    # 对于音频素材，同时调整source_timerange的duration，使其与target_timerange一致
+                                    if material_type == 'audio':
+                                        print(f"    处理音频素材，调整source_timerange")
+                                        if 'source_timerange' not in segment:
+                                            segment['source_timerange'] = {}
+                                        # 保持source_timerange的start不变，只调整duration
+                                        segment['source_timerange']['duration'] = new_duration
+                                        print(f"    同步 source_timerange: duration={new_duration}")
+                                    
                                     print(f"  [更新] {material_name}")
                                     print(f"    旧位置: start={old_start}, duration={old_duration}, end={old_end}")
                                     print(f"    新位置: start={old_start}, duration={new_duration}, end={new_end}")
                                     print(f"    目标结束时间: {video_end_time}")
                                     print(f"    时间同步: {abs(new_end - video_end_time) < 1000} (误差小于1ms)")
                                     found = True
-                                    break
-                            if found:
-                                break
+                                    processed_segments += 1
+                                    # 不要break，继续处理其他可能的segment
+                            # 不要break，继续检查其他track
                         
-                        if not found:
+                        if found:
+                            print(f"  [完成] 处理了 {processed_segments} 个片段")
+                        else:
                             print(f"  [警告] 未找到素材片段: {material_name} (material_id: {material_id})")
                     
                     print("=" * 60)
@@ -709,7 +906,10 @@ class TimingSynchronizer:
             with open(draft_content_file, 'r', encoding='utf-8') as f:
                 draft_content = json.load(f)
             
-            # 同步TTS和字幕时序
+            # 步骤1: 同步语音文件时长（从textReading目录读取实际语音文件时长）
+            draft_content = self.sync_audio_durations(draft_dir, draft_content)
+            
+            # 步骤2: 同步TTS和字幕时序
             updated_content = self.sync_tts_and_subtitles(draft_content, self.video_data)
             
             # 保存更新后的JSON文件
@@ -722,3 +922,97 @@ class TimingSynchronizer:
         except Exception as e:
             print(f"处理剪映草稿时序失败: {str(e)}")
             self.show_error("错误", f"处理剪映草稿时序失败: {str(e)}")
+    
+    def _detect_newspaper_type(self, news):
+        """检测报纸类型"""
+        # 从新闻标题或内容中检测报纸类型
+        title = news.get('title', '')
+        content = news.get('content', '')
+        
+        # 检查关键词
+        if '金融时报' in title or '金融时报' in content:
+            return '金融时报'
+        elif '华尔街日报' in title or '华尔街日报' in content:
+            return '华尔街日报'
+        
+        # 默认返回金融时报
+        return '金融时报'
+    
+    def _get_video_dimensions(self):
+        """获取视频尺寸"""
+        # 从配置中获取视频尺寸
+        if hasattr(self, 'config') and self.config:
+            video_settings = self.config.get('video_settings', {})
+            width = video_settings.get('width', 1500)
+            height = video_settings.get('height', 3200)
+            return width, height
+        # 默认值
+        return 1500, 3200
+    
+    def _get_newspaper_config(self, newspaper_type):
+        """获取报纸配置"""
+        if hasattr(self, 'config') and self.config:
+            newspaper_position = self.config.get('newspaper_position', {})
+            config = newspaper_position.get(newspaper_type, {})
+            if config:
+                return config
+        
+        # 默认配置
+        return {
+            'x': 100,
+            'y': 200,
+            'width': 1300,
+            'height': 2800
+        }
+    
+    def _calculate_sticker_transform(self, news_center_x, news_center_y, paper_config, video_width, video_height, orig_image_width=1600, orig_image_height=3200):
+        """
+        计算贴纸在视频中的transform位置（比例值）
+        
+        参数:
+            news_center_x: 新闻在报纸图片中的中心点x坐标
+            news_center_y: 新闻在报纸图片中的中心点y坐标
+            paper_config: 报纸在视频中的配置 {x, y, width, height}
+            video_width: 视频宽度
+            video_height: 视频高度
+            orig_image_width: 报纸图片原始宽度
+            orig_image_height: 报纸图片原始高度
+            
+        返回:
+            transform_x, transform_y: 相对于视频尺寸的比例值
+        """
+        # 报纸在视频中的位置和尺寸
+        paper_x = paper_config.get('x', 100)
+        paper_y = paper_config.get('y', 200)
+        paper_width = paper_config.get('width', 1300)
+        paper_height = paper_config.get('height', 2800)
+        
+        # 使用传入的图片原始尺寸
+        orig_paper_width = orig_image_width
+        orig_paper_height = orig_image_height
+        
+        # 计算新闻中心点在报纸图片中的比例位置
+        news_ratio_x = news_center_x / orig_paper_width
+        news_ratio_y = news_center_y / orig_paper_height
+        
+        # 计算新闻中心点在视频中的实际像素位置
+        video_pixel_x = paper_x + news_ratio_x * paper_width
+        video_pixel_y = paper_y + news_ratio_y * paper_height
+        
+        # 转换为比例值（相对于视频尺寸，左下角为-1,-1，右上角为1,1，中间为0,0）
+        # 计算相对于视频中心的位置
+        center_x = video_width / 2
+        center_y = video_height / 2
+        
+        # 计算偏移量（相对于中心）
+        offset_x = video_pixel_x - center_x
+        offset_y = video_pixel_y - center_y
+        
+        # 转换为-1到1的范围
+        transform_x = (offset_x / center_x)
+        transform_y = (offset_y / center_y)
+        
+        # 注意：y轴方向通常是相反的，需要反转
+        transform_y = -transform_y
+        
+        return transform_x, transform_y

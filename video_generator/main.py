@@ -12,8 +12,9 @@ from .timing_sync import TimingSynchronizer
 
 class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, JianyingDraftManager, TimingSynchronizer):
     def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
-        # 只调用VideoGeneratorBase的初始化
+        # 调用所有父类的初始化
         VideoGeneratorBase.__init__(self, config, progress_label_widget, progress_bar_widget, root)
+        TimingSynchronizer.__init__(self, config, progress_label_widget, progress_bar_widget, root)
     
     def edit_news_inline(self, event):
         """行内编辑新闻（双击编辑）"""
@@ -119,19 +120,20 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
     
     def delete_news(self):
         """删除选中的新闻（支持多选）"""
-        if not self.news_listbox:
+        if not hasattr(self, 'news_selections') or not self.news_selections:
             self.show_info("提示", "新闻列表未初始化")
             return
         
-        selection = self.news_listbox.curselection()
-        if not selection:
+        # 收集选中的索引
+        selected_indices = [i for i, selected in enumerate(self.news_selections) if selected]
+        if not selected_indices:
             self.show_info("提示", "请先选择要删除的新闻")
             return
         
-        selected_count = len(selection)
+        selected_count = len(selected_indices)
         if messagebox.askyesno("确认删除", f"确定要删除选中的 {selected_count} 条新闻吗?"):
             # 按索引倒序删除，避免索引变化问题
-            for index in sorted(selection, reverse=True):
+            for index in sorted(selected_indices, reverse=True):
                 if 0 <= index < len(self.video_data):
                     del self.video_data[index]
             
