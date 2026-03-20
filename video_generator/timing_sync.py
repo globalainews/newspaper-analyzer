@@ -94,17 +94,19 @@ class TimingSynchronizer:
             except Exception as e:
                 print(f"  [错误] 读取 {audio_file} 失败: {str(e)}")
         
-        # 更新draft_content中的audios素材
+        # 更新draft_content中的audios素材和segments
         materials = draft_content.get('materials', {})
         audios = materials.get('audios', [])
+        tracks = draft_content.get('tracks', [])
         
-        print(f"\n[步骤2] 匹配并更新audios素材...")
+        print(f"\n[步骤2] 匹配并更新audios素材和对应的segments...")
         
         updated_count = 0
         for audio in audios:
             audio_type = audio.get('type', '')
             audio_name = audio.get('name', '')
             audio_path = audio.get('path', '')
+            audio_id = audio.get('id', '')
             
             if audio_type != 'text_to_audio':
                 continue
@@ -125,33 +127,31 @@ class TimingSynchronizer:
                 
                 print(f"  [更新] {audio_name}: {old_duration/1e6:.2f}秒 → {duration_sec:.2f}秒")
                 updated_count += 1
+                
+                # 同时更新对应的segments中的target_timerange和source_timerange
+                for track in tracks:
+                    segments = track.get('segments', [])
+                    for segment in segments:
+                        material_id = segment.get('material_id')
+                        if material_id == audio_id:
+                            # 更新target_timerange
+                            target_timerange = segment.get('target_timerange', {})
+                            old_target_duration = target_timerange.get('duration', 0)
+                            target_timerange['duration'] = new_duration
+                            
+                            # 更新source_timerange
+                            source_timerange = segment.get('source_timerange')
+                            if source_timerange is None:
+                                source_timerange = {}
+                                segment['source_timerange'] = source_timerange
+                            old_source_duration = source_timerange.get('duration', 0)
+                            source_timerange['duration'] = new_duration
+                            
+                            print(f"  [同步] material_id={material_id}: target_timerange.duration {old_target_duration} → {new_duration}")
+                            print(f"  [同步] material_id={material_id}: source_timerange.duration {old_source_duration} → {new_duration}")
         
         print(f"\n共更新 {updated_count} 个音频素材的duration")
-
-        print(f"\n[步骤3] 同步segments中的source_timerange与target_timerange...")
-        tracks = draft_content.get('tracks', [])
-
-        for track in tracks:
-            segments = track.get('segments', [])
-            for segment in segments:
-                material_id = segment.get('material_id')
-                target_timerange = segment.get('target_timerange', {})
-                source_timerange = segment.get('source_timerange')
-
-                # 确保source_timerange是字典
-                if source_timerange is None:
-                    source_timerange = {}
-                    segment['source_timerange'] = source_timerange
-
-                target_duration = target_timerange.get('duration', 0)
-                source_duration = source_timerange.get('duration', 0)
-
-                if target_duration != source_duration and target_duration > 0:
-                    old_source_duration = source_duration
-                    source_timerange['duration'] = target_duration
-                    print(f"  [同步] material_id={material_id}: source_timerange.duration {old_source_duration} → {target_duration}")
-
-        print(f"\nsegments中的source_timerange同步完成")
+        print(f"\nsegments中的target_timerange和source_timerange同步完成")
         print("=" * 60)
         print("语音文件时长同步完成")
         print("=" * 60)
@@ -856,6 +856,13 @@ class TimingSynchronizer:
                                 text_item['content'] = new_text
                                 print(f"  显示content为空，设置为: {new_text}")
                             break
+            
+            # 3. 更新草稿文件最上层的duration值（微秒）
+            if duration_us > 0:
+                # 将秒转换为微秒
+                total_duration_us = duration_us
+                data['duration'] = total_duration_us
+                print(f"  更新最上层duration为: {total_duration_us}微秒 = {total_duration}秒")
             
             return data
             

@@ -30,11 +30,22 @@ class VideoGeneratorBase:
     def update_progress(self, text, value=0, fg="#3498DB"):
         """更新进度信息"""
         if self.progress_label:
-            self.progress_label.config(text=text, fg=fg)
+            try:
+                self.progress_label.config(text=text, fg=fg)
+            except Exception:
+                pass
         if self.progress_bar and value >= 0:
-            self.progress_bar['value'] = value
+            try:
+                # 检查progress_bar是否仍然存在
+                if hasattr(self.progress_bar, 'winfo_exists') and self.progress_bar.winfo_exists():
+                    self.progress_bar['value'] = value
+            except Exception:
+                pass
         if self.root:
-            self.root.update()
+            try:
+                self.root.update()
+            except Exception:
+                pass
     
     def show_error(self, title, message):
         """显示错误信息"""

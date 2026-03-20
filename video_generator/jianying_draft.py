@@ -218,10 +218,17 @@ class JianyingDraftManager:
                         
                         print(f"文本内容替换完成")
                         
-                        if directory_existed:
-                            self.show_info("成功", f"剪映草稿文本已更新!\n\n目录: {draft_dir}")
-                        else:
-                            self.show_info("成功", f"剪映草稿目录生成完成!\n\n目录: {draft_dir}")
+                        # 移除成功提示框，保持静默操作
+                        # if hasattr(self, 'show_auto_dismiss_message'):
+                        #     if directory_existed:
+                        #         self.show_auto_dismiss_message("成功", "剪映草稿文本已更新!")
+                        #     else:
+                        #         self.show_auto_dismiss_message("成功", "剪映草稿目录生成完成!")
+                        # else:
+                        #     if directory_existed:
+                        #         self.show_info("成功", f"剪映草稿文本已更新!\n\n目录: {draft_dir}")
+                        #     else:
+                        #         self.show_info("成功", f"剪映草稿目录生成完成!\n\n目录: {draft_dir}")
                         
                         # 生成语音文件
                         print("\n" + "=" * 60)
@@ -230,6 +237,23 @@ class JianyingDraftManager:
                         
                         if VOICE_CLONE_AVAILABLE:
                             try:
+                                # 显示全屏进度窗口
+                                if hasattr(self, 'show_fullscreen_progress'):
+                                    self.show_fullscreen_progress("生成语音", "正在初始化语音生成...", 0)
+                                
+                                # 定义进度回调函数
+                                last_update_time = [0]  # 使用列表存储可变值
+                                import time
+                                
+                                def progress_callback(current, total, message=''):
+                                    current_time = time.time()
+                                    # 每2秒更新一次
+                                    if current_time - last_update_time[0] >= 2 or current == total:
+                                        last_update_time[0] = current_time
+                                        progress = int((current / total) * 100) if total > 0 else 0
+                                        if hasattr(self, 'show_fullscreen_progress'):
+                                            self.show_fullscreen_progress("生成语音", message or f"正在生成第 {current}/{total} 条语音...", progress)
+                                
                                 # 获取参考音频路径
                                 reference_audio = None
                                 cosyvoice_config = self.config.get('cosyvoice', {})
@@ -241,17 +265,28 @@ class JianyingDraftManager:
                                     draft_dir,
                                     self.video_data,
                                     self.config,
-                                    reference_audio
+                                    reference_audio,
+                                    progress_callback
                                 )
+                                
+                                # 关闭进度窗口
+                                if hasattr(self, 'close_fullscreen_progress'):
+                                    self.close_fullscreen_progress()
                                 
                                 if generated_files:
                                     print(f"\n语音生成完成! 共生成 {len(generated_files)} 个音频文件")
                                     for gf in generated_files:
                                         print(f"  - {gf['filename']}")
+                                    # 显示成功提示
+                                    if hasattr(self, 'show_auto_dismiss_message'):
+                                        self.show_auto_dismiss_message("成功", f"语音生成完成! 共 {len(generated_files)} 个文件")
                                 else:
                                     print("警告: 没有生成任何语音文件")
                                     
                             except Exception as e:
+                                # 关闭进度窗口
+                                if hasattr(self, 'close_fullscreen_progress'):
+                                    self.close_fullscreen_progress()
                                 print(f"生成语音文件失败: {str(e)}")
                                 import traceback
                                 traceback.print_exc()

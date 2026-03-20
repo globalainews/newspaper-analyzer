@@ -3,6 +3,7 @@
 
 import os
 import tkinter as tk
+from tkinter import ttk
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 class UIHelpers:
     def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
@@ -10,6 +11,70 @@ class UIHelpers:
         self.selection_start = None
         self.selection_rect = None
         self.selected_region = None
+        self.progress_window = None
+        self.progress_frame = None  # 进度层框架
+        self.progress_label = None
+        self.progress_bar_widget = None
+    
+    def show_fullscreen_progress(self, title, message, progress=0):
+        """显示在当前窗口中间的进度层
+        
+        Args:
+            title: 标题
+            message: 消息内容
+            progress: 进度百分比 (0-100)
+        """
+        if not self.root:
+            return
+        
+        # 如果进度层不存在，创建一个
+        if self.progress_frame is None or not self.progress_frame.winfo_exists():
+            # 创建进度层框架，覆盖在主窗口上
+            self.progress_frame = tk.Frame(self.root, bg='#2C3E50', relief=tk.FLAT)
+            self.progress_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER, 
+                                   width=400, height=200)
+            
+            # 创建标题标签
+            self.progress_title_label = tk.Label(self.progress_frame, text=title, 
+                                                 font=('Microsoft YaHei', 16, 'bold'),
+                                                 bg='#2C3E50', fg='white')
+            self.progress_title_label.pack(pady=(30, 15))
+            
+            # 创建消息标签
+            self.progress_message_label = tk.Label(self.progress_frame, text=message,
+                                                   font=('Microsoft YaHei', 12),
+                                                   bg='#2C3E50', fg='white')
+            self.progress_message_label.pack(pady=5)
+            
+            # 创建进度条
+            self.progress_bar = ttk.Progressbar(self.progress_frame, length=300, 
+                                               mode='determinate', maximum=100)
+            self.progress_bar.pack(pady=15)
+            
+            # 创建进度百分比标签
+            self.progress_percent_label = tk.Label(self.progress_frame, text="0%",
+                                                   font=('Microsoft YaHei', 10),
+                                                   bg='#2C3E50', fg='white')
+            self.progress_percent_label.pack(pady=5)
+        else:
+            # 更新现有进度层
+            self.progress_title_label.config(text=title)
+            self.progress_message_label.config(text=message)
+            self.progress_bar['value'] = progress
+            self.progress_percent_label.config(text=f"{progress}%")
+        
+        # 强制更新界面
+        self.root.update()
+    
+    def close_fullscreen_progress(self):
+        """关闭进度层"""
+        if self.progress_frame and self.progress_frame.winfo_exists():
+            self.progress_frame.destroy()
+            self.progress_frame = None
+        # 兼容旧代码
+        if self.progress_window and self.progress_window.winfo_exists():
+            self.progress_window.destroy()
+            self.progress_window = None
     
     def set_preview_canvas(self, canvas):
         self.preview_canvas = canvas
@@ -327,19 +392,23 @@ class UIHelpers:
             content_text.pack(side=tk.TOP, fill=tk.X, padx=5, pady=(1, 2))
             content_text.bind('<FocusOut>', lambda e, idx=i, key='content': self.on_news_text_change(e, idx, key))
             
+            # 按钮容器
+            btn_container = tk.Frame(news_item, bg='white')
+            btn_container.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(0, 5))
+            
             # 播放按钮
-            play_btn = tk.Button(news_item, text="▶️ 播放语音", 
+            play_btn = tk.Button(btn_container, text="▶️ 播放语音", 
                                font=("Microsoft YaHei", 9), bg='#3498DB', fg='white',
                                relief=tk.FLAT, padx=8, pady=2, cursor='hand2',
                                command=lambda idx=i: self.play_news_audio(idx))
-            play_btn.pack(side=tk.BOTTOM, anchor='w', padx=5, pady=(0, 5))
+            play_btn.pack(side=tk.LEFT, padx=(0, 5))
             
             # 生成语音按钮
-            generate_btn = tk.Button(news_item, text="🎤 生成语音", 
+            generate_btn = tk.Button(btn_container, text="🎤 生成语音", 
                                    font=("Microsoft YaHei", 9), bg='#27AE60', fg='white',
                                    relief=tk.FLAT, padx=8, pady=2, cursor='hand2',
                                    command=lambda idx=i: self.generate_news_audio(idx))
-            generate_btn.pack(side=tk.BOTTOM, anchor='w', padx=5, pady=(0, 5))
+            generate_btn.pack(side=tk.LEFT)
             
             # 存储文本框引用
             self.news_textboxes.append({
@@ -386,6 +455,50 @@ class UIHelpers:
                 textbox_info['frame'].config(bg='white')
                 textbox_info['title'].config(bg='#f8f9fa')
                 textbox_info['content'].config(bg='white')
+        
+        # 更新矩形框的高亮状态
+        self.update_rectangle_highlight()
+    
+    def update_rectangle_highlight(self):
+        """更新矩形框的高亮状态"""
+        if not hasattr(self, 'preview_canvas'):
+            return
+        
+        canvas = self.preview_canvas
+        
+        # 颜色列表
+        colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', 
+                  '#FF8800', '#8800FF', '#0088FF', '#88FF00']
+        
+        # 更新每个矩形框的样式
+        for i in range(len(self.video_data)):
+            # 获取矩形框
+            rect_tags = canvas.find_withtag(f'news_block_{i}')
+            
+            if rect_tags:
+                # 根据选中状态设置颜色和线宽
+                if i < len(self.news_selections) and self.news_selections[i]:
+                    color = '#FF0000'  # 选中时使用红色
+                    line_width = 4
+                else:
+                    color = colors[i % len(colors)]
+                    line_width = 2
+                
+                # 更新矩形框样式
+                canvas.itemconfig(rect_tags[0], outline=color, width=line_width)
+                
+                # 更新控制点颜色
+                for j in range(8):
+                    handle_tags = canvas.find_withtag(f'handle_{i}_{j}')
+                    if handle_tags:
+                        handle_color = '#FF0000' if (i < len(self.news_selections) and self.news_selections[i]) else colors[i % len(colors)]
+                        canvas.itemconfig(handle_tags[0], fill=handle_color)
+                
+                # 更新标签颜色
+                label_tags = canvas.find_withtag(f'label_{i}')
+                if label_tags:
+                    label_color = '#FF0000' if (i < len(self.news_selections) and self.news_selections[i]) else colors[i % len(colors)]
+                    canvas.itemconfig(label_tags[0], fill=label_color)
     
     def on_news_text_change(self, event, index, key):
         """新闻文本修改事件"""
@@ -496,7 +609,8 @@ class UIHelpers:
                 self.update_progress(f"正在生成第{index+1}条新闻的语音...", 0)
                 
                 # 直接调用generate_voice方法，避免批量处理的索引问题
-                success = cloner.generate_voice(news['content'], output_file, speed=cloner.speed, silent=True)
+                # 使用与剪映草稿功能相同的参数：text_frontend=False
+                success = cloner.generate_voice(news['content'], output_file, speed=cloner.speed, silent=True, text_frontend=False)
                 
                 if success:
                     self.update_progress("语音生成成功", 100, "#27AE60")

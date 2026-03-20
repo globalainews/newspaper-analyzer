@@ -87,8 +87,20 @@ class VoiceCloner:
         else:
             self.reference_audio = os.path.join(COSYVOICE_ROOT_DIR, 'testCosyvoice.WAV')
         
+        # 处理音色文件路径
+        voice_file_config = cosyvoice_config.get('voice_file', '')
+        if voice_file_config:
+            if os.path.isabs(voice_file_config):
+                self.voice_file = voice_file_config
+            else:
+                self.voice_file = os.path.join(COSYVOICE_ROOT_DIR, voice_file_config)
+        else:
+            self.voice_file = os.path.join(COSYVOICE_ROOT_DIR, 'myVoice.pt')
+        
         self.speed = cosyvoice_config.get('speed', 1.3)
         self.instruct = cosyvoice_config.get('instruct', 'You are a helpful assistant.<|endofprompt|>')
+        self.seed = cosyvoice_config.get('seed', 888)  # 读取随机种子参数
+        self.voice_loaded = False  # 音色文件加载状态
     
     def _report_progress(self, current, total, message=''):
         """报告进度"""
@@ -122,24 +134,32 @@ class VoiceCloner:
             self.sample_rate = self.cosyvoice.sample_rate
             self.model_loaded = True
             
-            print(f"模型加载成功! 采样率: {self.sample_rate}")
+            # 设置随机种子以保持生成风格一致（只设置一次）
+            import torch
+            torch.manual_seed(self.seed)
+            torch.cuda.manual_seed_all(self.seed)  # 如果使用GPU
             
-            # 显示模型加载完成对话窗
-            try:
-                import tkinter as tk
-                from tkinter import messagebox
-                
-                # 创建一个临时的tk根窗口
-                root = tk.Tk()
-                root.withdraw()  # 隐藏主窗口
-                
-                # 显示信息框
-                messagebox.showinfo("模型加载", "CosyVoice3模型加载完成\n点击OK开始生成音频")
-                
-                root.destroy()
-            except Exception as e:
-                # 如果tkinter有问题，继续执行
-                print(f"显示对话窗失败: {e}")
+            print(f"模型加载成功! 采样率: {self.sample_rate}, 语速: {self.speed}, 随机种子: {self.seed}")
+            
+            # 尝试加载音色文件
+            self.load_voice_file()
+            
+            # 移除模型加载完成对话窗
+            # try:
+            #     import tkinter as tk
+            #     from tkinter import messagebox
+            #     
+            #     # 创建一个临时的tk根窗口
+            #     root = tk.Tk()
+            #     root.withdraw()  # 隐藏主窗口
+            #     
+            #     # 显示信息框
+            #     messagebox.showinfo("模型加载", "CosyVoice3模型加载完成\n点击OK开始生成音频")
+            #     
+            #     root.destroy()
+            # except Exception as e:
+            #     # 如果tkinter有问题，继续执行
+            #     print(f"显示对话窗失败: {e}")
             
             return True
             
@@ -151,7 +171,59 @@ class VoiceCloner:
             print(f"加载模型失败: {str(e)}")
             return False
     
-    def generate_voice(self, text, output_file, reference_audio=None, speed=None, silent=False):
+    def load_voice_file(self):
+        """
+        加载音色文件（myVoice.pt）
+        
+        Returns:
+            bool: 是否成功
+        """
+        if not self.model_loaded:
+            return False
+        
+        try:
+            if os.path.exists(self.voice_file):
+                print(f"正在加载音色文件: {self.voice_file}")
+                import torch
+                voice_info = torch.load(self.voice_file, map_location=self.cosyvoice.frontend.device)
+                
+                # 确保所有必要的字段都存在且不是None
+                # 对于prompt_text和prompt_text_len，使用包含<|endofprompt|>的张量
+                if voice_info.get('prompt_text') is None or voice_info['prompt_text'].numel() == 0:
+                    # 生成包含<|endofprompt|>的prompt_text
+                    endofprompt_text = 'You are a helpful assistant.<|endofprompt|>'
+                    prompt_text_token, _ = self.cosyvoice.frontend._extract_text_token(endofprompt_text)
+                    voice_info['prompt_text'] = prompt_text_token
+                    voice_info['prompt_text_len'] = torch.tensor([prompt_text_token.shape[1]], dtype=torch.int32).to(self.cosyvoice.frontend.device)
+                
+                # 确保其他必要字段存在
+                required_fields = ['llm_prompt_speech_token', 'llm_prompt_speech_token_len', 
+                                 'flow_prompt_speech_token', 'flow_prompt_speech_token_len', 
+                                 'prompt_speech_feat', 'prompt_speech_feat_len', 
+                                 'llm_embedding', 'flow_embedding']
+                for field in required_fields:
+                    if field not in voice_info or voice_info[field] is None:
+                        print(f"警告: 音色文件缺少字段: {field}")
+                        self.voice_loaded = False
+                        return False
+                
+                # 将音色信息添加到spk2info中
+                spk_id = 'my_voice'
+                self.cosyvoice.frontend.spk2info[spk_id] = voice_info
+                self.voice_loaded = True
+                print("✅ 音色文件加载成功!")
+                return True
+            else:
+                print(f"警告: 音色文件不存在: {self.voice_file}")
+                print("将使用参考音频进行零样本克隆")
+                self.voice_loaded = False
+                return False
+        except Exception as e:
+            print(f"加载音色文件失败: {str(e)}")
+            self.voice_loaded = False
+            return False
+
+    def generate_voice(self, text, output_file, reference_audio=None, speed=None, silent=False, text_frontend=False, zero_shot_spk_id=''):
         """
         生成单个语音文件
         
@@ -161,6 +233,8 @@ class VoiceCloner:
             reference_audio: 参考音频文件路径（可选，默认使用配置中的）
             speed: 语速（可选，默认使用配置中的）
             silent: 是否静默模式（不打印日志）
+            text_frontend: 是否使用文本前端处理（默认False，避免前端分开）
+            zero_shot_spk_id: 零样本说话人ID（可选）
         
         Returns:
             bool: 是否成功
@@ -185,29 +259,68 @@ class VoiceCloner:
             
             if not silent:
                 print(f"正在生成语音: '{text[:50]}...'")
+                print(f"  语速参数: {voice_speed}")
+            
+            # 直接处理整个文本，不进行分割
+            from cosyvoice.cli.frontend import CosyVoiceFrontEnd
+            
+            # 前端处理
+            tts_text = text
+            if text_frontend:
+                # 直接调用frontend的text_normalize但不分割
+                normalized_text = self.cosyvoice.frontend.text_normalize(tts_text, split=False, text_frontend=text_frontend)
+            else:
+                # 即使不使用前端处理，也确保文本是字符串格式
+                normalized_text = str(tts_text)
+            
+            # 检查文本长度
+            if len(normalized_text) > 1000:
+                if not silent:
+                    print(f"警告: 文本长度较长 ({len(normalized_text)} 字符)，可能会影响生成质量")
             
             # 生成语音
             all_speech = []
-            total_duration = 0
             
-            for i, result in enumerate(self.cosyvoice.inference_instruct2(
-                text,
-                self.instruct,
-                ref_audio,
-                stream=False,
-                speed=voice_speed,
-                text_frontend=False
-            )):
-                speech = result['tts_speech']
+            # 准备模型输入
+            if self.voice_loaded:
+                # 使用加载的音色文件
+                model_input = self.cosyvoice.frontend.frontend_instruct2(
+                    normalized_text, 
+                    self.instruct, 
+                    ref_audio,  # 虽然使用音色文件，但仍需要参考音频路径（可能是模型要求）
+                    self.cosyvoice.sample_rate, 
+                    zero_shot_spk_id='my_voice'  # 使用加载的音色
+                )
+            else:
+                # 使用参考音频进行零样本克隆
+                model_input = self.cosyvoice.frontend.frontend_instruct2(
+                    normalized_text, 
+                    self.instruct, 
+                    ref_audio, 
+                    self.cosyvoice.sample_rate, 
+                    zero_shot_spk_id=zero_shot_spk_id
+                )
+            
+            # 检查模型输入
+            if not silent:
+                text_token = model_input.get('text', None)
+                if text_token is not None:
+                    print(f"文本编码长度: {text_token.shape[1]}  tokens")
+            
+            # 生成语音
+            for model_output in self.cosyvoice.model.tts(**model_input, stream=False, speed=voice_speed):
+                speech = model_output['tts_speech']
                 all_speech.append(speech)
-                duration = speech.shape[1] / self.sample_rate
-                total_duration += duration
                 if not silent:
-                    print(f"  片段 {i+1} 时长: {duration:.2f} 秒")
+                    print(f"生成语音片段: {speech.shape[1]}  samples")
             
-            # 合并语音片段
+            # 合并语音片段（如果有的话）
             if all_speech:
                 merged_speech = torch.cat(all_speech, dim=1)
+                
+                if not silent:
+                    print(f"合并后语音长度: {merged_speech.shape[1]}  samples")
+                    print(f"预计时长: {merged_speech.shape[1] / self.sample_rate:.2f} 秒")
                 
                 # 确保输出目录存在
                 output_dir = os.path.dirname(output_file)
@@ -234,7 +347,7 @@ class VoiceCloner:
                 traceback.print_exc()
             return False
     
-    def generate_voices_for_news(self, news_list, output_dir, reference_audio=None, speed=None):
+    def generate_voices_for_news(self, news_list, output_dir, reference_audio=None, speed=None, text_frontend=False):
         """
         为新闻列表批量生成语音
         
@@ -243,6 +356,7 @@ class VoiceCloner:
             output_dir: 输出目录（textReading目录）
             reference_audio: 参考音频文件路径（可选）
             speed: 语速（可选）
+            text_frontend: 是否使用文本前端处理（默认False，避免前端分开）
         
         Returns:
             list: 生成的音频文件列表
@@ -262,37 +376,41 @@ class VoiceCloner:
         print(f"\n开始批量生成语音，共 {total_news} 条新闻...")
         print("=" * 60)
         
+        # 初始化进度
+        self._report_progress(0, total_news + 1, "准备生成测试音频...")
+        
         # 添加测试音频
         print("[测试] 生成测试音频...")
         test_output_file = os.path.join(output_dir, "test_audio.wav")
         test_content = "今天的天气不错啊"
         
-        # 生成测试音频（静默模式）
-        test_success = self.generate_voice(test_content, test_output_file, reference_audio, speed, silent=True)
+        # 生成测试音频（暂时关闭静默模式以查看错误信息）
+        test_success = self.generate_voice(test_content, test_output_file, reference_audio, speed, silent=False, text_frontend=text_frontend)
         
         if test_success:
             print("[测试] 测试音频生成成功: test_audio.wav")
         else:
             print("[测试] 测试音频生成失败")
         
-        # 初始化进度条
-        self._progress_bar = ProgressBar(total_news, prefix='语音生成')
+        # 测试音频完成，更新进度
+        self._report_progress(1, total_news + 1, "测试音频生成完成")
         
+        # 为每条新闻生成语音
         for i, news in enumerate(news_list):
             content = news.get('content', '')
             audio_filename = f"audio{i+1:02d}.wav"
             
             if not content:
-                self._report_progress(i + 1, total_news, f'{audio_filename} - 跳过(内容为空)')
+                self._report_progress(i + 2, total_news + 1, f'{audio_filename} - 跳过(内容为空)')
                 continue
             
             output_file = os.path.join(output_dir, audio_filename)
             
             # 更新进度
-            self._report_progress(i + 1, total_news, f'正在生成 {audio_filename}...')
+            self._report_progress(i + 2, total_news + 1, f'正在生成 {audio_filename}...')
             
             # 生成语音（静默模式，避免干扰进度条）
-            success = self.generate_voice(content, output_file, reference_audio, speed, silent=True)
+            success = self.generate_voice(content, output_file, reference_audio, speed, silent=True, text_frontend=text_frontend)
             
             if success:
                 generated_files.append({
@@ -302,14 +420,84 @@ class VoiceCloner:
                     'content': content
                 })
                 # 更新进度条显示完成状态
-                self._report_progress(i + 1, total_news, f'{audio_filename} ✓')
+                self._report_progress(i + 2, total_news + 1, f'{audio_filename} ✓')
             else:
-                self._report_progress(i + 1, total_news, f'{audio_filename} ✗ 失败')
+                self._report_progress(i + 2, total_news + 1, f'{audio_filename} ✗ 失败')
         
         print("\n" + "=" * 60)
         print(f"批量语音生成完成! 成功: {len(generated_files)}/{total_news}")
 
         return generated_files
+
+
+    def generate_voice_file(self, reference_audio, output_file):
+        """
+        从参考音频生成音色文件（.pt）
+        
+        Args:
+            reference_audio: 参考音频文件路径
+            output_file: 输出音色文件路径（.pt）
+        
+        Returns:
+            bool: 是否成功
+        """
+        if not self.model_loaded:
+            if not self.load_model():
+                return False
+        
+        try:
+            import torch
+            
+            # 检查参考音频文件
+            if not os.path.exists(reference_audio):
+                print(f"错误: 参考音频文件不存在: {reference_audio}")
+                return False
+            
+            print(f"正在从参考音频生成音色文件: {reference_audio}")
+            
+            # 提取语音特征
+            speech_feat, speech_feat_len = self.cosyvoice.frontend._extract_speech_feat(reference_audio)
+            print(f"✓ 提取speech_feat: shape={speech_feat.shape}")
+            
+            # 提取语音token
+            speech_token, speech_token_len = self.cosyvoice.frontend._extract_speech_token(reference_audio)
+            print(f"✓ 提取speech_token: shape={speech_token.shape}")
+            
+            # 提取说话人嵌入
+            embedding = self.cosyvoice.frontend._extract_spk_embedding(reference_audio)
+            print(f"✓ 提取embedding: shape={embedding.shape}")
+            
+            # 构建说话人信息字典
+            speaker_info = {
+                'prompt_text': None,  # 不需要prompt文本
+                'prompt_text_len': None,
+                'llm_prompt_speech_token': speech_token,
+                'llm_prompt_speech_token_len': speech_token_len,
+                'flow_prompt_speech_token': speech_token,
+                'flow_prompt_speech_token_len': speech_token_len,
+                'prompt_speech_feat': speech_feat,
+                'prompt_speech_feat_len': speech_feat_len,
+                'llm_embedding': embedding,
+                'flow_embedding': embedding
+            }
+            
+            # 确保输出目录存在
+            output_dir = os.path.dirname(output_file)
+            if output_dir and not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            
+            # 保存为pt文件
+            print(f"保存音色文件到: {output_file}")
+            torch.save(speaker_info, output_file)
+            print("✅ 音色文件生成成功!")
+            
+            return True
+            
+        except Exception as e:
+            print(f"生成音色文件失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
 
 
 # 全局VoiceCloner实例
@@ -323,7 +511,7 @@ def get_cosyvoice_cloner(config=None, progress_callback=None):
     return _cosyvoice_cloner
 
 
-def clone_voices_for_draft(draft_dir, news_list, config=None, reference_audio=None, progress_callback=None):
+def clone_voices_for_draft(draft_dir, news_list, config=None, reference_audio=None, progress_callback=None, text_frontend=False):
     """
     为剪映草稿生成语音文件
     
@@ -333,6 +521,7 @@ def clone_voices_for_draft(draft_dir, news_list, config=None, reference_audio=No
         config: 配置字典（可选）
         reference_audio: 参考音频文件路径（可选）
         progress_callback: 进度回调函数（可选）
+        text_frontend: 是否使用文本前端处理（默认False，避免前端分开）
     
     Returns:
         list: 生成的音频文件列表
@@ -364,7 +553,7 @@ def clone_voices_for_draft(draft_dir, news_list, config=None, reference_audio=No
             return []
 
     # 生成语音
-    return cloner.generate_voices_for_news(news_list, text_reading_dir, speed=cloner.speed)
+    return cloner.generate_voices_for_news(news_list, text_reading_dir, speed=cloner.speed, text_frontend=text_frontend)
 
 
 if __name__ == '__main__':

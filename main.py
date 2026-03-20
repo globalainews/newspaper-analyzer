@@ -512,6 +512,36 @@ class EnhancedKioskoDownloader:
             # 双击打开可缩放的图片预览
             self.analyzer.show_image_preview(filepath)
     
+    def show_auto_dismiss_message(self, title, message, duration=2000):
+        """显示自动消失的消息提示
+        
+        Args:
+            title: 标题
+            message: 消息内容
+            duration: 显示时长（毫秒），默认2秒
+        """
+        # 创建顶级窗口
+        popup = tk.Toplevel(self.root)
+        popup.title(title)
+        popup.geometry("300x80")
+        
+        # 计算位置（在主窗口中央）
+        popup.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() - popup.winfo_width()) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - popup.winfo_height()) // 2
+        popup.geometry(f"+{x}+{y}")
+        
+        # 设置为工具窗口样式（无任务栏图标）
+        popup.attributes('-toolwindow', True)
+        popup.attributes('-topmost', True)
+        
+        # 添加消息内容
+        tk.Label(popup, text=message, font=("Microsoft YaHei", 10), 
+                justify='center', wraplength=280).pack(expand=True)
+        
+        # 自动关闭
+        popup.after(duration, popup.destroy)
+    
     def on_refresh_list(self):
         self.refresh_image_list()
     
@@ -591,7 +621,12 @@ class EnhancedKioskoDownloader:
             self.prompt_text.delete(1.0, tk.END)
             self.prompt_text.insert(tk.END, prompt)
             
-            messagebox.showinfo("生成成功", f"Prompt已生成并保存到:\n{image_prompt_file}")
+            # 复制到系统剪贴板
+            self.root.clipboard_clear()
+            self.root.clipboard_append(prompt)
+            
+            # 显示自动消失的提示
+            self.show_auto_dismiss_message("生成成功", f"Prompt已生成、保存并复制到剪贴板")
             
         except Exception as e:
             messagebox.showerror("错误", f"生成Prompt失败: {str(e)}")

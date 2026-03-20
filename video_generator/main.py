@@ -14,6 +14,7 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
     def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
         # 调用所有父类的初始化
         VideoGeneratorBase.__init__(self, config, progress_label_widget, progress_bar_widget, root)
+        UIHelpers.__init__(self, config, progress_label_widget, progress_bar_widget, root)
         TimingSynchronizer.__init__(self, config, progress_label_widget, progress_bar_widget, root)
     
     def edit_news_inline(self, event):
