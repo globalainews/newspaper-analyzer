@@ -3,11 +3,16 @@ from tkinter import filedialog, messagebox, ttk
 from datetime import datetime
 from PIL import Image, ImageTk
 import os
+import threading
 
 from downloader import NewspaperDownloader
 from analyzer import ImageAnalyzer
 from video_generator.main import VideoGenerator
 from utils import load_config, refresh_image_list
+from gemini_automation import GeminiAutomation
+from ft_automation import FTAutomation
+from wsj_automation import WSJAutomation
+from browser_manager import browser_manager
 
 
 class EnhancedKioskoDownloader:
@@ -67,219 +72,293 @@ class EnhancedKioskoDownloader:
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
     
     def create_home_tab(self):
-        main_paned = tk.PanedWindow(self.home_frame, orient=tk.VERTICAL, sashrelief=tk.RAISED, sashwidth=4)
-        main_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        main_frame = tk.Frame(self.home_frame, bg='#F8F9FA')
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        download_frame = tk.Frame(main_paned)
-        main_paned.add(download_frame, minsize=250)
+        main_paned = tk.PanedWindow(main_frame, orient=tk.HORIZONTAL, 
+                                    sashrelief=tk.FLAT, sashwidth=6,
+                                    bg='#F8F9FA')
+        main_paned.pack(fill=tk.BOTH, expand=True)
         
-        tk.Label(download_frame, text="新闻报纸首页下载器", 
-                font=("Arial", 14, "bold")).pack(pady=5)
+        left_column = tk.Frame(main_paned, bg='white', width=280)
+        main_paned.add(left_column, minsize=260)
         
-        tk.Label(download_frame, text=f"从 kiosko.net 下载今日报纸首页 (保存到: {self.download_dir})", 
-                font=("Arial", 9)).pack(pady=2)
+        middle_column = tk.Frame(main_paned, bg='white')
+        main_paned.add(middle_column, minsize=400)
         
-        self.status_label = tk.Label(download_frame, text="准备就绪", 
-                                   font=("Arial", 9), fg="blue")
-        self.status_label.pack(pady=3)
+        right_column = tk.Frame(main_paned, bg='white')
+        main_paned.add(right_column, minsize=400)
         
-        button_frame = tk.Frame(download_frame)
-        button_frame.pack(pady=5)
+        self._create_left_column(left_column)
+        self._create_middle_column(middle_column)
+        self._create_right_column(right_column)
         
-        button_container = tk.Frame(button_frame)
-        button_container.pack()
+        self.refresh_image_list()
+    
+    def _create_left_column(self, parent):
+        parent.pack_propagate(False)
         
-        self.wsj_btn = tk.Button(button_container, text="下载华尔街日报", 
-                                command=lambda: self.on_download_click('wsj'),
-                                font=("Arial", 9), bg="#4CAF50", fg="white", 
-                                padx=10, pady=6, width=12)
-        self.wsj_btn.grid(row=0, column=0, padx=8, pady=3)
+        download_section = tk.Frame(parent, bg='white')
+        download_section.pack(fill=tk.X, padx=10, pady=10)
         
-        self.ft_btn = tk.Button(button_container, text="下载金融时报", 
-                               command=lambda: self.on_download_click('ft'),
-                               font=("Arial", 9), bg="#2196F3", fg="white", 
-                               padx=10, pady=6, width=12)
-        self.ft_btn.grid(row=0, column=1, padx=8, pady=3)
+        header = tk.Frame(download_section, bg='#2C3E50')
+        header.pack(fill=tk.X)
+        tk.Label(header, text="📥 下载中心", 
+                font=("Microsoft YaHei", 12, "bold"),
+                bg='#2C3E50', fg='white').pack(pady=10)
         
-        self.batch_btn = tk.Button(button_container, text="批量下载全部", 
-                                  command=self.on_batch_download_click,
-                                  font=("Arial", 9), bg="#FF9800", fg="white", 
-                                  padx=10, pady=6, width=12)
-        self.batch_btn.grid(row=0, column=2, padx=8, pady=3)
+        btn_frame = tk.Frame(download_section, bg='white')
+        btn_frame.pack(fill=tk.X, pady=10)
         
-        date_frame = tk.Frame(download_frame)
-        date_frame.pack(pady=3)
+        row1 = tk.Frame(btn_frame, bg='white')
+        row1.pack(fill=tk.X, pady=2)
         
-        date_inner_frame = tk.Frame(date_frame)
-        date_inner_frame.pack(anchor='center')
+        self.browser_btn = tk.Button(row1, text="打开浏览器",
+                                     font=("Microsoft YaHei", 9),
+                                     bg='#27AE60', fg='white',
+                                     relief=tk.FLAT, padx=10, pady=6,
+                                     cursor='hand2',
+                                     command=self.on_open_browser)
+        self.browser_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
         
-        tk.Label(date_inner_frame, text="日期设置:", font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=5, pady=2)
+        self.wsj_browser_btn = tk.Button(row1, text="华尔街日报(浏览器)",
+                                         font=("Microsoft YaHei", 9),
+                                         bg='#E74C3C', fg='white',
+                                         relief=tk.FLAT, padx=10, pady=6,
+                                         cursor='hand2',
+                                         command=self.on_wsj_browser_download)
+        self.wsj_browser_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+        
+        self.ft_browser_btn = tk.Button(row1, text="金融时报(浏览器)",
+                                        font=("Microsoft YaHei", 9),
+                                        bg='#9B59B6', fg='white',
+                                        relief=tk.FLAT, padx=10, pady=6,
+                                        cursor='hand2',
+                                        command=self.on_ft_browser_download)
+        self.ft_browser_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+        
+        row2 = tk.Frame(btn_frame, bg='white')
+        row2.pack(fill=tk.X, pady=2)
+        
+        self.batch_btn = tk.Button(row2, text="批量下载",
+                                  font=("Microsoft YaHei", 9),
+                                  bg='#F39C12', fg='white',
+                                  relief=tk.FLAT, padx=10, pady=6,
+                                  cursor='hand2',
+                                  command=self.on_batch_download_click)
+        self.batch_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+        
+        date_frame = tk.Frame(download_section, bg='#F8F9FA')
+        date_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        tk.Label(date_frame, text="📅 日期:",
+                font=("Microsoft YaHei", 9),
+                bg='#F8F9FA').pack(side=tk.LEFT, padx=5)
         
         self.date_var = tk.StringVar(value="today")
         
-        tk.Radiobutton(date_inner_frame, text="今日", variable=self.date_var, value="today", font=("Arial", 9)).pack(side=tk.LEFT, padx=3, pady=2)
-        tk.Radiobutton(date_inner_frame, text="昨日", variable=self.date_var, value="yesterday", font=("Arial", 9)).pack(side=tk.LEFT, padx=3, pady=2)
-        tk.Radiobutton(date_inner_frame, text="自定义", variable=self.date_var, value="custom", font=("Arial", 9)).pack(side=tk.LEFT, padx=3, pady=2)
+        tk.Radiobutton(date_frame, text="今日", variable=self.date_var, value="today", 
+                      font=("Microsoft YaHei", 9), bg='#F8F9FA').pack(side=tk.LEFT, padx=2)
+        tk.Radiobutton(date_frame, text="昨日", variable=self.date_var, value="yesterday", 
+                      font=("Microsoft YaHei", 9), bg='#F8F9FA').pack(side=tk.LEFT, padx=2)
+        tk.Radiobutton(date_frame, text="自定义", variable=self.date_var, value="custom", 
+                      font=("Microsoft YaHei", 9), bg='#F8F9FA').pack(side=tk.LEFT, padx=2)
         
-        self.custom_date_entry = tk.Entry(date_inner_frame, width=10, font=("Arial", 9))
-        self.custom_date_entry.pack(side=tk.LEFT, padx=5, pady=2)
+        self.custom_date_entry = tk.Entry(date_frame, width=10, font=("Microsoft YaHei", 9))
+        self.custom_date_entry.pack(side=tk.LEFT, padx=5)
         self.custom_date_entry.insert(0, datetime.now().strftime('%Y/%m/%d'))
         self.custom_date_entry.config(state='disabled')
         
         self.date_var.trace('w', self.on_date_change)
         
-        analysis_frame = tk.Frame(main_paned)
-        main_paned.add(analysis_frame, minsize=400)
+        self.status_label = tk.Label(download_section, text="✅ 准备就绪",
+                                    font=("Microsoft YaHei", 9),
+                                    bg='white', fg='#27AE60')
+        self.status_label.pack(pady=5)
         
-        analysis_paned = tk.PanedWindow(analysis_frame, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=4)
-        analysis_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        separator = tk.Frame(parent, bg='#E9ECEF', height=2)
+        separator.pack(fill=tk.X, padx=10, pady=5)
         
-        left_frame = tk.Frame(analysis_paned, width=280)
-        analysis_paned.add(left_frame, minsize=250)
+        list_section = tk.Frame(parent, bg='white')
+        list_section.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
         
-        title_frame = tk.Frame(left_frame, bg='#2C3E50')
-        title_frame.pack(fill=tk.X)
-        tk.Label(title_frame, text="📰 图片列表", font=("Microsoft YaHei", 12, "bold"), 
-                bg='#2C3E50', fg='white').pack(pady=8)
+        list_header = tk.Frame(list_section, bg='#34495E')
+        list_header.pack(fill=tk.X)
         
-        status_frame = tk.Frame(left_frame, bg='#ECF0F1')
-        status_frame.pack(fill=tk.X, padx=10, pady=3)
-        self.gemini_status_label = tk.Label(status_frame, text="初始化中...", font=("Microsoft YaHei", 9), 
-                bg='#ECF0F1', fg='#95A5A6')
-        self.gemini_status_label.pack(anchor='w', pady=3)
+        tk.Label(list_header, text="📰 图片列表",
+                font=("Microsoft YaHei", 12, "bold"),
+                bg='#34495E', fg='white').pack(side=tk.LEFT, padx=10, pady=8)
         
-        list_container = tk.Frame(left_frame, bg='#BDC3C7', relief=tk.SUNKEN, bd=1)
-        list_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        self.image_count_label = tk.Label(list_header, text="共 0 张",
+                                         font=("Microsoft YaHei", 9),
+                                         bg='#34495E', fg='#BDC3C7')
+        self.image_count_label.pack(side=tk.RIGHT, padx=10)
         
-        list_scroll = tk.Scrollbar(list_container)
-        list_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        status_bar = tk.Frame(list_section, bg='#F8F9FA')
+        status_bar.pack(fill=tk.X)
         
-        self.image_listbox = tk.Listbox(list_container, font=("Microsoft YaHei", 10), 
-                                        yscrollcommand=list_scroll.set, 
-                                        bg='white', selectbackground='#3498DB',
-                                        selectforeground='white', borderwidth=0)
-        self.image_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        list_scroll.config(command=self.image_listbox.yview)
+        self.gemini_status_label = tk.Label(status_bar, text="初始化中...",
+                                           font=("Microsoft YaHei", 9),
+                                           bg='#F8F9FA', fg='#95A5A6')
+        self.gemini_status_label.pack(side=tk.LEFT, padx=10, pady=5)
+        
+        list_frame = tk.Frame(list_section, bg='#E9ECEF')
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        scrollbar = tk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.image_listbox = tk.Listbox(list_frame,
+                                        font=("Microsoft YaHei", 10),
+                                        yscrollcommand=scrollbar.set,
+                                        bg='white',
+                                        selectbackground='#3498DB',
+                                        selectforeground='white',
+                                        relief=tk.FLAT,
+                                        highlightthickness=0)
+        self.image_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=1, pady=1)
+        scrollbar.config(command=self.image_listbox.yview)
         
         self.image_listbox.bind('<<ListboxSelect>>', self.on_image_select)
         self.image_listbox.bind('<Double-1>', self.on_image_double_click)
         
-        btn_frame = tk.Frame(left_frame, bg='#ECF0F1')
-        btn_frame.pack(fill=tk.X, padx=10, pady=(0, 5))
+        action_frame = tk.Frame(list_section, bg='#F8F9FA')
+        action_frame.pack(fill=tk.X, pady=5)
         
-        refresh_btn = tk.Button(btn_frame, text="🔄 刷新列表", command=self.on_refresh_list,
-                              font=('Microsoft YaHei', 10), bg='#3498DB', fg='white',
-                              relief=tk.FLAT, padx=10, pady=5, cursor='hand2')
-        refresh_btn.pack(side=tk.LEFT)
+        actions = [
+            ("🔄 刷新", '#3498DB', self.on_refresh_list),
+            ("📊 分析", '#9B59B6', self.on_analyze_click),
+            ("🌐 Gemini", '#E67E22', self.on_open_gemini),
+            ("💾 保存图片", '#27AE60', self.on_download_image),
+        ]
         
-        download_btn = tk.Button(btn_frame, text="💾 下载图片", command=self.on_download_image,
-                              font=('Microsoft YaHei', 10), bg='#27AE60', fg='white',
-                              relief=tk.FLAT, padx=10, pady=5, cursor='hand2')
-        download_btn.pack(side=tk.LEFT, padx=(5, 0))
+        for text, color, cmd in actions:
+            tk.Button(action_frame, text=text, command=cmd,
+                     font=("Microsoft YaHei", 9),
+                     bg=color, fg='white',
+                     relief=tk.FLAT, padx=8, pady=5,
+                     cursor='hand2').pack(side=tk.LEFT, padx=2)
+    
+    def _create_middle_column(self, parent):
+        preview_section = tk.Frame(parent, bg='white')
+        preview_section.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        generate_prompt_btn = tk.Button(btn_frame, text="📝 生成Prompt", command=self.on_generate_prompt,
-                               font=('Microsoft YaHei', 10), bg='#F39C12', fg='white',
-                               relief=tk.FLAT, padx=10, pady=5, cursor='hand2')
-        generate_prompt_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        header = tk.Frame(preview_section, bg='#2C3E50')
+        header.pack(fill=tk.X)
         
-        analyze_btn = tk.Button(btn_frame, text="🔍 分析图片", command=self.on_analyze_click,
-                               font=('Microsoft YaHei', 10), bg='#9B59B6', fg='white',
-                               relief=tk.FLAT, padx=10, pady=5, cursor='hand2')
-        analyze_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        tk.Label(header, text="🖼️ 图片预览",
+                font=("Microsoft YaHei", 12, "bold"),
+                bg='#2C3E50', fg='white').pack(pady=10)
         
-        right_frame = tk.Frame(analysis_paned)
-        analysis_paned.add(right_frame, minsize=500)
+        canvas_frame = tk.Frame(preview_section, bg='#E9ECEF')
+        canvas_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
         
-        right_paned = tk.PanedWindow(right_frame, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=4)
-        right_paned.pack(fill=tk.BOTH, expand=True)
-        
-        preview_container = tk.Frame(right_paned)
-        right_paned.add(preview_container, minsize=350)
-        
-        preview_title = tk.Frame(preview_container, bg='#2C3E50')
-        preview_title.pack(fill=tk.X)
-        tk.Label(preview_title, text="🖼️ 图片预览", font=("Microsoft YaHei", 12, "bold"), 
-                bg='#2C3E50', fg='white').pack(pady=8)
-        
-        preview_canvas_frame = tk.Frame(preview_container, bg='#BDC3C7', relief=tk.SUNKEN, bd=1)
-        preview_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 5))
-        
-        self.preview_canvas = tk.Canvas(preview_canvas_frame, bg='white', highlightthickness=0)
-        self.preview_canvas.pack(fill=tk.BOTH, expand=True)
+        self.preview_canvas = tk.Canvas(canvas_frame, bg='white', highlightthickness=0)
+        self.preview_canvas.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
         
         self.preview_text_id = self.preview_canvas.create_text(
-            175, 200, text="选择左侧图片查看预览", 
-            font=("Microsoft YaHei", 12), fill='#95A5A6'
+            200, 300, text="选择左侧图片查看预览",
+            font=("Microsoft YaHei", 14), fill='#95A5A6'
         )
         
-        result_container = tk.Frame(right_paned)
-        right_paned.add(result_container, minsize=400)
+        self.preview_canvas.bind('<Configure>', self._on_preview_resize)
+    
+    def _on_preview_resize(self, event):
+        self.preview_canvas.coords(self.preview_text_id, event.width // 2, event.height // 2)
+    
+    def _create_right_column(self, parent):
+        right_paned = tk.PanedWindow(parent, orient=tk.VERTICAL,
+                                     sashrelief=tk.FLAT, sashwidth=6,
+                                     bg='white')
+        right_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Prompt文本框
-        prompt_title = tk.Frame(result_container, bg='#34495E')
-        prompt_title.pack(fill=tk.X)
-        prompt_frame = tk.Frame(prompt_title, bg='#34495E')
-        prompt_frame.pack(fill=tk.X, padx=10, pady=5)
-        tk.Label(prompt_frame, text="💬 Prompt", font=('Microsoft YaHei', 10, 'bold'), 
-                bg='#34495E', fg='white').pack(side=tk.LEFT, padx=5)
-        save_prompt_btn = tk.Button(prompt_frame, text="💾 保存", command=self.on_save_prompt,
-                                   font=('Microsoft YaHei', 8), bg='#27AE60', fg='white',
-                                   relief=tk.FLAT, padx=8, pady=2, cursor='hand2')
-        save_prompt_btn.pack(side=tk.RIGHT, padx=5)
+        prompt_section = tk.Frame(right_paned, bg='white')
+        right_paned.add(prompt_section, minsize=200)
         
-        prompt_text_container = tk.Frame(result_container, bg='#BDC3C7', relief=tk.SUNKEN, bd=1)
-        prompt_text_container.pack(fill=tk.X, padx=10, pady=(0, 5))
+        prompt_header = tk.Frame(prompt_section, bg='#34495E')
+        prompt_header.pack(fill=tk.X)
         
-        prompt_scroll = tk.Scrollbar(prompt_text_container)
+        tk.Label(prompt_header, text="💬 Prompt",
+                font=("Microsoft YaHei", 12, "bold"),
+                bg='#34495E', fg='white').pack(side=tk.LEFT, padx=10, pady=8)
+        
+        btn_frame = tk.Frame(prompt_header, bg='#34495E')
+        btn_frame.pack(side=tk.RIGHT, padx=10)
+        
+        tk.Button(btn_frame, text="� 生成",
+                 font=("Microsoft YaHei", 9),
+                 bg='#27AE60', fg='white',
+                 relief=tk.FLAT, padx=10, pady=3,
+                 cursor='hand2',
+                 command=self.on_generate_prompt).pack(side=tk.LEFT, padx=2)
+        
+        tk.Button(btn_frame, text="💾",
+                 font=("Microsoft YaHei", 9),
+                 bg='#27AE60', fg='white',
+                 relief=tk.FLAT, padx=8, pady=3,
+                 cursor='hand2',
+                 command=self.on_save_prompt).pack(side=tk.LEFT, padx=2)
+        
+        prompt_text_frame = tk.Frame(prompt_section, bg='#E9ECEF')
+        prompt_text_frame.pack(fill=tk.BOTH, expand=True, pady=(5, 0))
+        
+        prompt_scroll = tk.Scrollbar(prompt_text_frame)
         prompt_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.prompt_text = tk.Text(prompt_text_container, font=('Microsoft YaHei', 10), 
-                                   wrap=tk.WORD, yscrollcommand=prompt_scroll.set,
-                                   bg='white', borderwidth=0, height=8)
-        self.prompt_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.prompt_text = tk.Text(prompt_text_frame,
+                                  font=("Microsoft YaHei", 10),
+                                  wrap=tk.WORD,
+                                  bg='white',
+                                  relief=tk.FLAT,
+                                  padx=10, pady=10,
+                                  yscrollcommand=prompt_scroll.set)
+        self.prompt_text.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
         prompt_scroll.config(command=self.prompt_text.yview)
         
-        # 为prompt_text添加事件处理，确保编辑时保持图片列表的选中状态
         self.prompt_text.bind('<FocusIn>', self.on_text_focus_in)
         self.prompt_text.bind('<FocusOut>', self.on_text_focus_out)
-        # 添加鼠标事件处理，确保选择文本时保持选中状态
         self.prompt_text.bind('<Button-1>', self.on_text_mouse_down)
         self.prompt_text.bind('<B1-Motion>', self.on_text_mouse_drag)
         self.prompt_text.bind('<ButtonRelease-1>', self.on_text_mouse_up)
         
-        # 分析结果文本框
-        result_title = tk.Frame(result_container, bg='#2C3E50')
-        result_title.pack(fill=tk.X)
-        result_frame = tk.Frame(result_title, bg='#2C3E50')
-        result_frame.pack(fill=tk.X, padx=10, pady=5)
-        tk.Label(result_frame, text="📝 分析结果", font=('Microsoft YaHei', 12, 'bold'), 
-                bg='#2C3E50', fg='white').pack(side=tk.LEFT, padx=5)
-        save_result_btn = tk.Button(result_frame, text="💾 保存", command=self.on_save_result,
-                                   font=('Microsoft YaHei', 8), bg='#27AE60', fg='white',
-                                   relief=tk.FLAT, padx=8, pady=2, cursor='hand2')
-        save_result_btn.pack(side=tk.RIGHT, padx=5)
+        result_section = tk.Frame(right_paned, bg='white')
+        right_paned.add(result_section, minsize=400)
         
-        result_text_container = tk.Frame(result_container, bg='#BDC3C7', relief=tk.SUNKEN, bd=1)
-        result_text_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 5))
+        result_header = tk.Frame(result_section, bg='#2C3E50')
+        result_header.pack(fill=tk.X)
         
-        result_scroll = tk.Scrollbar(result_text_container)
-        result_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        tk.Label(result_header, text="📝 分析结果",
+                font=("Microsoft YaHei", 12, "bold"),
+                bg='#2C3E50', fg='white').pack(side=tk.LEFT, padx=10, pady=8)
         
-        self.result_text = tk.Text(result_text_container, font=('Microsoft YaHei', 10), 
-                                   wrap=tk.WORD, yscrollcommand=result_scroll.set,
-                                   bg='white', borderwidth=0)
-        self.result_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        result_scroll.config(command=self.result_text.yview)
+        tk.Button(result_header, text="💾 保存",
+                 font=("Microsoft YaHei", 9),
+                 bg='#27AE60', fg='white',
+                 relief=tk.FLAT, padx=10, pady=3,
+                 cursor='hand2',
+                 command=self.on_save_result).pack(side=tk.RIGHT, padx=10)
         
-        # 为result_text添加事件处理，确保编辑时保持图片列表的选中状态
+        result_text_frame = tk.Frame(result_section, bg='#E9ECEF')
+        result_text_frame.pack(fill=tk.BOTH, expand=True, pady=(5, 0))
+        
+        scrollbar = tk.Scrollbar(result_text_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.result_text = tk.Text(result_text_frame,
+                                  font=("Microsoft YaHei", 10),
+                                  wrap=tk.WORD,
+                                  bg='white',
+                                  relief=tk.FLAT,
+                                  padx=10, pady=10,
+                                  yscrollcommand=scrollbar.set)
+        self.result_text.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+        scrollbar.config(command=self.result_text.yview)
+        
         self.result_text.bind('<FocusIn>', self.on_text_focus_in)
         self.result_text.bind('<FocusOut>', self.on_text_focus_out)
-        # 添加鼠标事件处理，确保选择文本时保持选中状态
         self.result_text.bind('<Button-1>', self.on_text_mouse_down)
         self.result_text.bind('<B1-Motion>', self.on_text_mouse_drag)
         self.result_text.bind('<ButtonRelease-1>', self.on_text_mouse_up)
-        
-        self.refresh_image_list()
     
     def create_video_tab(self):
         main_paned = tk.PanedWindow(self.video_frame, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=4)
@@ -545,6 +624,185 @@ class EnhancedKioskoDownloader:
     def on_refresh_list(self):
         self.refresh_image_list()
     
+    def on_open_browser(self):
+        """打开Chrome浏览器"""
+        def run_open_browser():
+            try:
+                self.update_status("正在启动浏览器...", "blue")
+                
+                def status_callback(message):
+                    self.update_status(message, "blue")
+                    self.root.update()
+                
+                result = browser_manager.start_chrome(status_callback=status_callback)
+                
+                if result:
+                    self.update_status("浏览器已启动", "green")
+                else:
+                    self.update_status("浏览器启动失败", "red")
+                    messagebox.showerror("错误", "无法启动浏览器")
+                    
+            except Exception as e:
+                import traceback
+                error_details = traceback.format_exc()
+                self.update_status(f"发生错误: {str(e)}", "red")
+                print(f"[异常] 浏览器启动失败: {str(e)}")
+                print(error_details)
+        
+        thread = threading.Thread(target=run_open_browser, daemon=True)
+        thread.start()
+    
+    def on_ft_browser_download(self):
+        """通过浏览器下载金融时报首页"""
+        def run_ft_automation():
+            try:
+                self.update_status("正在启动金融时报下载...", "blue")
+                
+                def progress_callback(message, progress):
+                    if progress:
+                        pass
+                    self.update_status(message, "blue")
+                    self.root.update()
+                
+                def status_callback(message):
+                    self.update_status(message, "blue")
+                    self.root.update()
+                
+                ft = FTAutomation(
+                    self.config,
+                    progress_callback=progress_callback,
+                    status_callback=status_callback
+                )
+                
+                result = ft.download_ft_frontpage(self.download_dir)
+                
+                if result:
+                    self.update_status(f"金融时报下载完成: {result}", "green")
+                    self.refresh_image_list()
+                    messagebox.showinfo("成功", f"金融时报首页已下载到:\n{result}")
+                else:
+                    self.update_status("金融时报下载失败", "red")
+                    messagebox.showerror("错误", "未能下载金融时报首页，请手动操作")
+                    
+            except Exception as e:
+                import traceback
+                error_details = traceback.format_exc()
+                self.update_status(f"发生错误: {str(e)}", "red")
+                print(f"[异常] 金融时报下载失败: {str(e)}")
+                print(error_details)
+        
+        thread = threading.Thread(target=run_ft_automation, daemon=True)
+        thread.start()
+    
+    def on_wsj_browser_download(self):
+        """通过浏览器下载华尔街日报首页"""
+        def run_wsj_automation():
+            try:
+                self.update_status("正在启动华尔街日报下载...", "blue")
+                
+                def progress_callback(message, progress):
+                    if progress:
+                        pass
+                    self.update_status(message, "blue")
+                    self.root.update()
+                
+                def status_callback(message):
+                    self.update_status(message, "blue")
+                    self.root.update()
+                
+                wsj = WSJAutomation(
+                    self.config,
+                    progress_callback=progress_callback,
+                    status_callback=status_callback
+                )
+                
+                result = wsj.download_wsj_frontpage(self.download_dir)
+                
+                if result:
+                    self.update_status(f"华尔街日报下载完成: {result}", "green")
+                    self.refresh_image_list()
+                    messagebox.showinfo("成功", f"华尔街日报首页已下载到:\n{result}")
+                else:
+                    self.update_status("华尔街日报下载失败", "red")
+                    messagebox.showerror("错误", "未能下载华尔街日报首页，请手动操作")
+                    
+            except Exception as e:
+                import traceback
+                error_details = traceback.format_exc()
+                self.update_status(f"发生错误: {str(e)}", "red")
+                print(f"[异常] 华尔街日报下载失败: {str(e)}")
+                print(error_details)
+        
+        thread = threading.Thread(target=run_wsj_automation, daemon=True)
+        thread.start()
+    
+    def on_open_gemini(self):
+        """打开Gemini页面并自动分析"""
+        selection = self.image_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("警告", "请先选择一张图片")
+            return
+        
+        filename = self.image_listbox.get(selection[0])
+        image_path = os.path.join(self.download_dir, filename)
+        
+        if not os.path.exists(image_path):
+            messagebox.showerror("错误", f"图片文件不存在: {image_path}")
+            return
+        
+        prompt_text = self.prompt_text.get("1.0", tk.END).strip()
+        if not prompt_text:
+            try:
+                with open('prompt.txt', 'r', encoding='utf-8') as f:
+                    prompt_text = f.read()
+            except:
+                messagebox.showwarning("警告", "请先生成或输入Prompt")
+                return
+        
+        def run_gemini_automation():
+            try:
+                self.update_status("正在启动Gemini自动化...", "blue")
+
+                def progress_callback(message, progress):
+                    if progress:
+                        self.progress_bar['value'] = progress
+                    self.update_status(message, "blue")
+                    self.root.update()
+                    print(f"[进度] {message} - {progress}%")
+
+                def status_callback(message):
+                    self.update_status(message, "blue")
+                    self.root.update()
+                    print(f"[状态] {message}")
+
+                gemini = GeminiAutomation(
+                    self.config,
+                    progress_callback=progress_callback,
+                    status_callback=status_callback
+                )
+
+                result = gemini.open_gemini_and_analyze(prompt_text, image_path)
+
+                if result:
+                    self.result_text.delete(1.0, tk.END)
+                    self.result_text.insert(tk.END, result)
+                    self.update_status("Gemini分析完成", "green")
+                    print("[成功] Gemini分析完成")
+                else:
+                    error_msg = "未能获取Gemini分析结果"
+                    self.update_status("Gemini分析失败", "red")
+                    print(f"[错误] {error_msg}")
+
+            except Exception as e:
+                import traceback
+                error_details = traceback.format_exc()
+                self.update_status(f"发生错误: {str(e)}", "red")
+                print(f"[异常] Gemini自动化失败: {str(e)}")
+                print(error_details)
+        
+        thread = threading.Thread(target=run_gemini_automation, daemon=True)
+        thread.start()
+    
     def on_analyze_click(self):
         selection = self.image_listbox.curselection()
         if not selection:
@@ -747,6 +1005,7 @@ class EnhancedKioskoDownloader:
         image_files = refresh_image_list(self.download_dir)
         for filename in image_files:
             self.image_listbox.insert(tk.END, filename)
+        self.image_count_label.config(text=f"共 {len(image_files)} 张")
     
     def on_news_select(self, event):
         if self.video_generator:
