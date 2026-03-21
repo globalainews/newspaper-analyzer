@@ -5,6 +5,11 @@
 ## 功能特性
 
 - **图片下载**: 从 kiosko.net 下载华尔街日报(WSJ)和金融时报(FT)头版图片
+- **浏览器自动化**: 使用 Playwright 实现浏览器自动化下载
+  - 打开共享 Chrome 浏览器实例
+  - 华尔街日报 Twitter 首页图片下载
+  - 金融时报首页图片下载
+  - Gemini AI 自动分析
 - **AI 分析**: 使用 Google Gemini 2.5 Flash 模型分析报纸内容
 - **结果保存**: 自动保存分析结果，支持重复加载
 - **图片导出**: 支持导出图片到指定目录
@@ -22,7 +27,8 @@
 ## 安装依赖
 
 ```bash
-pip install requests Pillow
+pip install requests Pillow playwright
+playwright install chromium
 ```
 
 ## 配置文件 (config.json)
@@ -67,6 +73,10 @@ project/
 ├── config.json                      # 配置文件
 ├── analyzer.py                      # AI分析模块
 ├── downloader.py                    # 图片下载模块
+├── browser_manager.py               # Chrome浏览器管理器（共享实例）
+├── gemini_automation.py             # Gemini自动化分析模块
+├── ft_automation.py                 # 金融时报浏览器自动化模块
+├── wsj_automation.py                # 华尔街日报浏览器自动化模块
 ├── layoutlm_analyzer.py             # LayoutLM分析模块
 ├── news_image_exporter.py           # 图片导出模块
 ├── utils.py                         # 工具函数模块
@@ -100,6 +110,20 @@ project/
 4. 选择图片后点击"分析图片"进行分析
 5. 分析结果自动保存，下次点击图片时自动加载
 6. 新闻块位置会自动标识在图片预览上
+
+### 浏览器自动化功能
+
+1. 点击"打开浏览器"按钮启动 Chrome 浏览器（调试模式）
+2. 使用以下功能操作已打开的浏览器：
+   - **华尔街日报(浏览器)**: 自动访问 WSJ Twitter 页面，搜索并下载首页图片
+   - **金融时报(浏览器)**: 自动访问金融时报网站，下载首页图片
+   - **Gemini**: 自动打开 Gemini 页面，粘贴 prompt 并上传图片进行分析
+
+### 图片保存功能
+
+1. 在图片列表中选择一张图片
+2. 点击"保存图片"按钮
+3. 图片将自动保存到导出目录，并根据报纸类型命名
 
 ### 视频生成功能
 
@@ -164,6 +188,14 @@ python main.py
 4. 生成的视频草稿需要在剪映中进一步编辑和导出
 
 ## 更新日志
+
+### 2026-03-21
+- 添加浏览器自动化功能
+- 新增 Chrome 浏览器管理器（共享实例）
+- 新增华尔街日报 Twitter 自动下载功能
+- 新增金融时报浏览器自动下载功能
+- 新增 Gemini 自动分析功能（浏览器自动化）
+- 添加图片保存按钮功能
 
 ### 2026-03-16
 - 模块化重构视频生成代码
