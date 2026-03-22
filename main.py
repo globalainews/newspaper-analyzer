@@ -80,7 +80,7 @@ class EnhancedKioskoDownloader:
                                     bg='#F8F9FA')
         main_paned.pack(fill=tk.BOTH, expand=True)
         
-        left_column = tk.Frame(main_paned, bg='white', width=280)
+        left_column = tk.Frame(main_paned, bg='white', width=380)
         main_paned.add(left_column, minsize=260)
         
         middle_column = tk.Frame(main_paned, bg='white')
@@ -273,7 +273,7 @@ class EnhancedKioskoDownloader:
         right_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         prompt_section = tk.Frame(right_paned, bg='white')
-        right_paned.add(prompt_section, minsize=200)
+        right_paned.add(prompt_section, minsize=200, height=200)
         
         prompt_header = tk.Frame(prompt_section, bg='#34495E')
         prompt_header.pack(fill=tk.X)
@@ -322,7 +322,7 @@ class EnhancedKioskoDownloader:
         self.prompt_text.bind('<ButtonRelease-1>', self.on_text_mouse_up)
         
         result_section = tk.Frame(right_paned, bg='white')
-        right_paned.add(result_section, minsize=400)
+        right_paned.add(result_section, minsize=400, height=400)
         
         result_header = tk.Frame(result_section, bg='#2C3E50')
         result_header.pack(fill=tk.X)
