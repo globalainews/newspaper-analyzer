@@ -27,6 +27,8 @@ class EnhancedKioskoDownloader:
         self.download_dir = self.config['download_settings']['save_directory']
         self.analysis_dir = self.config.get('analysis_settings', {}).get('analysis_directory', 'analysis_results')
         
+        self.saved_image_selection = None
+        
         self.init_modules()
         self.create_interface()
     
@@ -67,6 +69,10 @@ class EnhancedKioskoDownloader:
         self.video_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.video_frame, text='视频生成')
         self.create_video_tab()
+        
+        self.network_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.network_frame, text='网络发布')
+        self.create_network_publishing_tab()
         
         # 绑定页签切换事件
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
@@ -364,8 +370,8 @@ class EnhancedKioskoDownloader:
         main_paned = tk.PanedWindow(self.video_frame, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=4)
         main_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        left_frame = tk.Frame(main_paned, width=600)
-        main_paned.add(left_frame, minsize=600)
+        left_frame = tk.Frame(main_paned, width=1200)
+        main_paned.add(left_frame, minsize=800)
         
         title_frame = tk.Frame(left_frame, bg='#2C3E50')
         title_frame.pack(fill=tk.X)
@@ -468,8 +474,8 @@ class EnhancedKioskoDownloader:
                             command=lambda: self.video_generator.generate_video() if self.video_generator else None)
         video_btn.pack(side=tk.RIGHT)
 
-        right_frame = tk.Frame(main_paned)
-        main_paned.add(right_frame, minsize=450)
+        right_frame = tk.Frame(main_paned, width=400)
+        main_paned.add(right_frame, minsize=300)
         
         preview_title = tk.Frame(right_frame, bg='#2C3E50')
         preview_title.pack(fill=tk.X)
@@ -499,6 +505,231 @@ class EnhancedKioskoDownloader:
         
         self.finalize_modules()
     
+    def create_network_publishing_tab(self):
+        """创建网络发布页签内容"""
+        main_frame = tk.Frame(self.network_frame, bg='#F5F6FA')
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        
+        main_paned = tk.PanedWindow(main_frame, orient=tk.VERTICAL, 
+                                    sashrelief=tk.RIDGE, sashwidth=8,
+                                    bg='#F5F6FA', showhandle=True)
+        main_paned.pack(fill=tk.BOTH, expand=True)
+        
+        video_container = tk.Frame(main_paned, bg='#F5F6FA')
+        main_paned.add(video_container, minsize=260, height=280)
+        
+        video_header = tk.Frame(video_container, bg='#E74C3C', height=40)
+        video_header.pack(fill=tk.X)
+        video_header.pack_propagate(False)
+        tk.Label(video_header, text="📹 视频发布", 
+                font=("Microsoft YaHei", 12, "bold"),
+                bg='#E74C3C', fg='white').pack(side=tk.LEFT, padx=15, pady=8)
+        
+        video_publish_btn = tk.Button(video_header, 
+                                      text="视频号发布", 
+                                      command=self.open_video_publishing_page,
+                                      font=("Microsoft YaHei", 9), 
+                                      bg='white', fg='#E74C3C', 
+                                      relief=tk.FLAT, padx=12, pady=3,
+                                      cursor='hand2', activebackground='#FADBD8')
+        video_publish_btn.pack(side=tk.RIGHT, padx=10, pady=6)
+        
+        video_content = tk.Frame(video_container, bg='white', relief=tk.FLAT)
+        video_content.pack(fill=tk.BOTH, expand=True)
+        
+        video_file_frame = tk.Frame(video_content, bg='white')
+        video_file_frame.pack(fill=tk.X, padx=15, pady=(12, 8))
+        
+        tk.Label(video_file_frame, text="视频文件", bg='white', 
+                font=("Microsoft YaHei", 9), fg='#7F8C8D').pack(anchor=tk.W)
+        
+        file_input_frame = tk.Frame(video_file_frame, bg='white')
+        file_input_frame.pack(fill=tk.X, pady=3)
+        
+        self.video_path_var = tk.StringVar(value="output/*.mp4")
+        video_path_entry = tk.Entry(file_input_frame, textvariable=self.video_path_var, 
+                                    font=("Microsoft YaHei", 10), 
+                                    relief=tk.SOLID, bd=1, highlightthickness=0)
+        video_path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=4)
+        
+        browse_btn = tk.Button(file_input_frame, text="浏览", 
+                              command=self.browse_video_file,
+                              font=("Microsoft YaHei", 9), 
+                              bg='#3498DB', fg='white', 
+                              relief=tk.FLAT, padx=15, pady=4,
+                              cursor='hand2')
+        browse_btn.pack(side=tk.LEFT, padx=(8, 0))
+        
+        video_info_frame = tk.Frame(video_content, bg='white')
+        video_info_frame.pack(fill=tk.X, padx=15, pady=(4, 12))
+        
+        video_desc_label_frame = tk.Frame(video_info_frame, bg='white')
+        video_desc_label_frame.pack(fill=tk.X)
+        tk.Label(video_desc_label_frame, text="视频描述", bg='white', 
+                font=("Microsoft YaHei", 9), fg='#7F8C8D').pack(side=tk.LEFT)
+        tk.Button(video_desc_label_frame, text="📋", 
+                 command=lambda: self.copy_text_to_clipboard(self.video_desc_text),
+                 font=("Segoe UI Emoji", 10), bg='#3498DB', fg='white',
+                 relief=tk.FLAT, padx=5, pady=0, cursor='hand2').pack(side=tk.LEFT, padx=6)
+        
+        self.video_desc_text = tk.Text(video_info_frame, height=2, 
+                                       font=("Microsoft YaHei", 10),
+                                       wrap=tk.WORD, relief=tk.SOLID, bd=1,
+                                       highlightthickness=0, bg='#FAFAFA')
+        self.video_desc_text.pack(fill=tk.X, pady=3, ipady=2)
+        
+        short_title_label_frame = tk.Frame(video_info_frame, bg='white')
+        short_title_label_frame.pack(fill=tk.X)
+        tk.Label(short_title_label_frame, text="短标题", bg='white', 
+                font=("Microsoft YaHei", 9), fg='#7F8C8D').pack(side=tk.LEFT)
+        tk.Button(short_title_label_frame, text="📋", 
+                 command=lambda: self.copy_var_to_clipboard(self.short_title_var),
+                 font=("Segoe UI Emoji", 10), bg='#3498DB', fg='white',
+                 relief=tk.FLAT, padx=5, pady=0, cursor='hand2').pack(side=tk.LEFT, padx=6)
+        
+        self.short_title_var = tk.StringVar()
+        short_title_entry = tk.Entry(video_info_frame, 
+                                     textvariable=self.short_title_var, 
+                                     font=("Microsoft YaHei", 10),
+                                     relief=tk.SOLID, bd=1, highlightthickness=0)
+        short_title_entry.pack(fill=tk.X, pady=3, ipady=4)
+        
+        wechat_container = tk.Frame(main_paned, bg='#F5F6FA')
+        main_paned.add(wechat_container, minsize=280)
+        
+        wechat_header = tk.Frame(wechat_container, bg='#27AE60', height=40)
+        wechat_header.pack(fill=tk.X)
+        wechat_header.pack_propagate(False)
+        tk.Label(wechat_header, text="📝 公众号发布", 
+                font=("Microsoft YaHei", 12, "bold"),
+                bg='#27AE60', fg='white').pack(side=tk.LEFT, padx=15, pady=8)
+        
+        wechat_publish_btn = tk.Button(wechat_header, 
+                                       text="公众号发布", 
+                                       command=self.open_wechat_publishing_page,
+                                       font=("Microsoft YaHei", 9), 
+                                       bg='white', fg='#27AE60', 
+                                       relief=tk.FLAT, padx=12, pady=3,
+                                       cursor='hand2', activebackground='#D5F5E3')
+        wechat_publish_btn.pack(side=tk.RIGHT, padx=10, pady=6)
+        
+        wechat_content = tk.Frame(wechat_container, bg='white', relief=tk.FLAT)
+        wechat_content.pack(fill=tk.BOTH, expand=True)
+        
+        title_frame = tk.Frame(wechat_content, bg='white')
+        title_frame.pack(fill=tk.X, padx=15, pady=(12, 4))
+        
+        title_label_frame = tk.Frame(title_frame, bg='white')
+        title_label_frame.pack(fill=tk.X)
+        tk.Label(title_label_frame, text="标题", bg='white', 
+                font=("Microsoft YaHei", 9), fg='#7F8C8D').pack(side=tk.LEFT)
+        tk.Button(title_label_frame, text="📋", 
+                 command=lambda: self.copy_var_to_clipboard(self.wechat_title_var),
+                 font=("Segoe UI Emoji", 10), bg='#27AE60', fg='white',
+                 relief=tk.FLAT, padx=5, pady=0, cursor='hand2').pack(side=tk.LEFT, padx=6)
+        
+        self.wechat_title_var = tk.StringVar()
+        title_entry = tk.Entry(title_frame, 
+                              textvariable=self.wechat_title_var, 
+                              font=("Microsoft YaHei", 10),
+                              relief=tk.SOLID, bd=1, highlightthickness=0)
+        title_entry.pack(fill=tk.X, pady=3, ipady=4)
+        
+        content_frame = tk.Frame(wechat_content, bg='white')
+        content_frame.pack(fill=tk.BOTH, padx=15, pady=(4, 12), expand=True)
+        
+        content_label_frame = tk.Frame(content_frame, bg='white')
+        content_label_frame.pack(fill=tk.X)
+        tk.Label(content_label_frame, text="正文", bg='white', 
+                font=("Microsoft YaHei", 9), fg='#7F8C8D').pack(side=tk.LEFT)
+        tk.Button(content_label_frame, text="📋", 
+                 command=lambda: self.copy_text_to_clipboard(self.wechat_content_text),
+                 font=("Segoe UI Emoji", 10), bg='#27AE60', fg='white',
+                 relief=tk.FLAT, padx=5, pady=0, cursor='hand2').pack(side=tk.LEFT, padx=6)
+        
+        content_text_frame = tk.Frame(content_frame, relief=tk.SOLID, bd=1)
+        content_text_frame.pack(fill=tk.BOTH, expand=True, pady=3)
+        
+        self.wechat_content_text = tk.Text(content_text_frame, 
+                                           font=("Microsoft YaHei", 10),
+                                           wrap=tk.WORD, bg='#FAFAFA',
+                                           relief=tk.FLAT, highlightthickness=0)
+        self.wechat_content_text.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+    
+    def copy_text_to_clipboard(self, text_widget):
+        """复制Text控件内容到剪贴板"""
+        content = text_widget.get("1.0", tk.END).strip()
+        self.root.clipboard_clear()
+        self.root.clipboard_append(content)
+        self.show_auto_dismiss_message("复制成功", "内容已复制到剪贴板", 1500)
+    
+    def copy_var_to_clipboard(self, var):
+        """复制StringVar内容到剪贴板"""
+        content = var.get()
+        self.root.clipboard_clear()
+        self.root.clipboard_append(content)
+        self.show_auto_dismiss_message("复制成功", "内容已复制到剪贴板", 1500)
+    
+    def browse_video_file(self):
+        """浏览选择视频文件"""
+        initial_dir = os.path.join(os.getcwd(), "output")
+        if not os.path.exists(initial_dir):
+            initial_dir = os.getcwd()
+        
+        file_path = filedialog.askopenfilename(
+            title="选择视频文件",
+            initialdir=initial_dir,
+            filetypes=[("视频文件", "*.mp4 *.avi *.mov"), ("所有文件", "*.*")]
+        )
+        
+        if file_path:
+            self.video_path_var.set(file_path)
+    
+    def open_video_publishing_page(self):
+        """打开微信视频号发布网页"""
+        import webbrowser
+        url = "https://channels.weixin.qq.com/platform/post/create"
+        webbrowser.open(url)
+        self.show_auto_dismiss_message("提示", "已在浏览器中打开视频号发布页面", 2000)
+    
+    def open_wechat_publishing_page(self):
+        """打开公众号发布网页"""
+        import webbrowser
+        url = "https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&action=edit&isNew=1&type=77&token=1147579328&lang=zh_CN"
+        webbrowser.open(url)
+        self.show_auto_dismiss_message("提示", "已在浏览器中打开公众号发布页面", 2000)
+    
+    def load_network_publishing_data(self, json_file):
+        """从JSON文件加载数据到网络发布页签"""
+        try:
+            import json
+            with open(json_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            if 'video_description' in data:
+                self.video_desc_text.delete(1.0, tk.END)
+                self.video_desc_text.insert(tk.END, data['video_description'])
+            
+            if 'short_title' in data:
+                self.short_title_var.set(data['short_title'])
+            
+            if 'wechat_article' in data:
+                article = data['wechat_article']
+                if 'title' in article:
+                    self.wechat_title_var.set(article['title'])
+                # 公众号正文包含summary和content
+                content_parts = []
+                if 'summary' in article:
+                    content_parts.append(article['summary'])
+                if 'content' in article:
+                    content_parts.append(article['content'])
+                if content_parts:
+                    self.wechat_content_text.delete(1.0, tk.END)
+                    self.wechat_content_text.insert(tk.END, '\n\n'.join(content_parts))
+                    
+        except Exception as e:
+            print(f"加载网络发布数据失败: {str(e)}")
+    
     def update_status(self, message, color="blue"):
         self.status_label.config(text=message, fg=color)
         self.root.update()
@@ -508,13 +739,38 @@ class EnhancedKioskoDownloader:
         selected_tab = self.notebook.select()
         tab_text = self.notebook.tab(selected_tab, "text")
         
+        # 获取当前图片选择状态（仅在首页有图片列表焦点时有效）
+        selection = self.image_listbox.curselection()
+        if selection:
+            self.saved_image_selection = selection[0]
+        
         # 当切换到视频生成页签时，根据当前选中的新闻图片加载JSON文件
         if tab_text == "视频生成" and self.video_generator:
-            # 获取当前选中的图片文件名
-            selection = self.image_listbox.curselection()
             if selection:
                 image_filename = self.image_listbox.get(selection[0])
                 self.video_generator.silent_load_json(image_filename)
+        
+        # 当切换到网络发布页签时，加载JSON数据
+        if tab_text == "网络发布":
+            if selection:
+                image_filename = self.image_listbox.get(selection[0])
+                base_name = os.path.splitext(image_filename)[0]
+                json_file = os.path.join(self.analysis_dir, f"{base_name}.json")
+                if os.path.exists(json_file):
+                    self.load_network_publishing_data(json_file)
+        
+        # 当切换回首页时，恢复图片列表的选择状态
+        if tab_text == "首页":
+            if hasattr(self, 'saved_image_selection') and self.saved_image_selection is not None:
+                try:
+                    idx = self.saved_image_selection
+                    self.image_listbox.selection_clear(0, tk.END)
+                    self.image_listbox.selection_set(idx)
+                    self.image_listbox.activate(idx)
+                    self.image_listbox.see(idx)
+                    self.image_listbox.event_generate('<<ListboxSelect>>')
+                except:
+                    pass
     
     def on_date_change(self, *args):
         if self.date_var.get() == "custom":
@@ -582,6 +838,11 @@ class EnhancedKioskoDownloader:
                 # 如果没有prompt.txt文件，清空prompt文本框
                 self.prompt_text.delete(1.0, tk.END)
                 self.prompt_text.insert(tk.END, "暂无Prompt文件\n\n点击'生成Prompt'按钮创建")
+            
+            # 同时加载网络发布页签的JSON数据
+            json_file = os.path.join(self.analysis_dir, f"{base_name}.json")
+            if os.path.exists(json_file):
+                self.load_network_publishing_data(json_file)
     
     def on_image_double_click(self, event):
         selection = self.image_listbox.curselection()
@@ -1006,6 +1267,10 @@ class EnhancedKioskoDownloader:
         for filename in image_files:
             self.image_listbox.insert(tk.END, filename)
         self.image_count_label.config(text=f"共 {len(image_files)} 张")
+        if image_files:
+            self.image_listbox.selection_set(0)
+            self.image_listbox.activate(0)
+            self.root.after(100, lambda: self.image_listbox.event_generate('<<ListboxSelect>>'))
     
     def on_news_select(self, event):
         if self.video_generator:

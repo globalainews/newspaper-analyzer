@@ -77,9 +77,9 @@ def export_image(source_filepath, export_dir, filename):
 
 
 def refresh_image_list(download_dir):
-    """刷新图片列表"""
+    """刷新图片列表，按修改日期倒序排列"""
     image_files = []
     if os.path.exists(download_dir):
         image_files = [f for f in os.listdir(download_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-        image_files = sorted(image_files)
+        image_files = sorted(image_files, key=lambda f: os.path.getmtime(os.path.join(download_dir, f)), reverse=True)
     return image_files
