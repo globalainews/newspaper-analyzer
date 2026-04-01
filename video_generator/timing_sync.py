@@ -724,7 +724,7 @@ class TimingSynchronizer:
                     
                     # 定义需要对齐的素材列表
                     materials_to_align = [
-                        {"type": "audio", "id": "6D967A4F-3E5F-4cf4-8B8D-BE2B17D3A3F8", "name": "早间播报 背景配乐"},
+                        {"type": "audio", "id": "0375B918-9C67-4dad-A791-E8DF540B04A4", "name": "新品发布"},
                         {"type": "audio", "id": "4C5380AE-3F65-488f-B887-C977206F83E8", "name": "时尚商务节奏 企业"},
                         {"type": "text", "id": "4F5AEA3A-6BDF-4933-8DE1-EC31E979E97F", "name": "文本1"},
                         {"type": "text", "id": "7453700C-DD8B-44d8-91DA-05690591DCA9", "name": "文本2"},
