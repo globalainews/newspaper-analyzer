@@ -379,10 +379,7 @@ class TimingSynchronizer:
                     last_subtitle_end = subtitle_end
             gap_04s = 400000
             last_position_start = last_subtitle_end + gap_04s
-            print(f"[调试] last_subtitle_end={last_subtitle_end}, gap_04s={gap_04s}, last_position_start={last_position_start}")
 
-            # 直接在 tracks 中查找 segment.material_id 对应的素材
-            # 找到所有 local_id="最后位置" 或 name="最后位置" 的素材 id
             materials = data.get('materials', {})
             last_position_ids = []
             for material_type in ['videos', 'audios', 'texts', 'stickers', 'images', 'effects']:
@@ -390,9 +387,7 @@ class TimingSynchronizer:
                 for item in type_list:
                     if item.get('local_id') == '最后位置' or item.get('name') == '最后位置':
                         last_position_ids.append(item.get('id'))
-            print(f"[调试] 找到 {len(last_position_ids)} 个'最后位置'素材: {last_position_ids}")
 
-            # 在 tracks 中查找这些素材对应的 segment
             tracks = data.get('tracks', [])
             for track_idx, track in enumerate(tracks):
                 segments = track.get('segments', [])
@@ -404,7 +399,6 @@ class TimingSynchronizer:
                         segment['target_timerange']['start'] = last_position_start
                         print(f"[已更新] 轨道{track_idx} 片段{seg_idx}: start {old_start} → {last_position_start}, segment_duration={segment_duration}")
                         total_video_duration = last_position_start + segment_duration
-                        print(f"[调试] 总时长 = {last_position_start} + {segment_duration} = {total_video_duration}")
 
             # 收集所有贴纸片段并按时间排序
             all_sticker_segments = []
