@@ -166,7 +166,7 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
 
                 test_text = "特朗普向德黑兰发出最后通牒，威胁若周二前不重新开放霍尔木兹海峡，将摧毁伊朗所有发电厂。此举极大地加剧了地区紧张局势。"
 
-                seeds = [random.randint(0, 99999) for _ in range(10)]
+                seeds = [random.randint(0, 65535) for _ in range(10)]
 
                 for i, seed in enumerate(seeds):
                     import torch
