@@ -140,7 +140,68 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
             self.show_info("成功", "新闻已向下移动!")
         else:
             self.show_info("提示", "已经是最后一条新闻")
-    
+
+    def test_voice_clone(self):
+        """测试音色克隆，生成10个不同seed的测试音频"""
+        import threading
+        import random
+
+        def do_test():
+            try:
+                from voice_clone import get_cosyvoice_cloner
+                import os
+
+                self.update_progress("正在加载模型...", 10)
+                cloner = get_cosyvoice_cloner(self.config)
+
+                if not cloner.model_loaded:
+                    if not cloner.load_model():
+                        self.show_error("错误", "模型加载失败")
+                        return
+
+                self.update_progress("模型加载完成，开始生成测试音频...", 30)
+
+                output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output')
+                os.makedirs(output_dir, exist_ok=True)
+
+                test_text = "特朗普向德黑兰发出最后通牒，威胁若周二前不重新开放霍尔木兹海峡，将摧毁伊朗所有发电厂。此举极大地加剧了地区紧张局势。"
+
+                seeds = [random.randint(0, 99999) for _ in range(10)]
+
+                for i, seed in enumerate(seeds):
+                    import torch
+                    torch.manual_seed(seed)
+                    if torch.cuda.is_available():
+                        torch.cuda.manual_seed_all(seed)
+
+                    filename = f"test{seed:05d}.wav"
+                    output_path = os.path.join(output_dir, filename)
+
+                    progress = 30 + int((i + 1) / 10 * 60)
+                    self.update_progress(f"生成中... {i+1}/10 (seed={seed})", progress)
+
+                    success = cloner.generate_voice(
+                        test_text,
+                        output_path,
+                        silent=False,
+                        text_frontend=False
+                    )
+
+                    if success:
+                        print(f"生成成功: {filename}")
+                    else:
+                        print(f"生成失败: {filename}")
+
+                self.update_progress("测试完成!", 100)
+                self.show_info("完成", f"已在 output 文件夹生成10个测试音频:\n" + "\n".join([f"test{seed:05d}.wav" for seed in seeds]))
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self.show_error("错误", f"测试失败: {str(e)}")
+
+        threading.Thread(target=do_test, daemon=True).start()
+
     def delete_news(self):
         """删除选中的新闻（支持多选）"""
         if not hasattr(self, 'news_selections') or not self.news_selections:

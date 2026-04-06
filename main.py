@@ -454,6 +454,13 @@ class EnhancedKioskoDownloader:
                             command=lambda: self.video_generator.load_cosyvoice_model() if self.video_generator else None)
         load_model_btn.pack(side=tk.LEFT, padx=5)
 
+        # 测试音色按钮
+        test_voice_btn = tk.Button(btn_frame, text="🎵 测试音色",
+                            font=("Microsoft YaHei", 10), bg='#E67E22', fg='white',
+                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
+                            command=lambda: self.video_generator.test_voice_clone() if self.video_generator else None)
+        test_voice_btn.pack(side=tk.LEFT, padx=5)
+
         # 生成剪映草稿按钮
         jianying_btn = tk.Button(btn_frame, text="🎬 剪映草稿", 
                                font=("Microsoft YaHei", 10), bg='#F39C12', fg='white',
