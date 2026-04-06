@@ -178,7 +178,7 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                     output_path = os.path.join(output_dir, filename)
 
                     progress = 30 + int((i + 1) / 10 * 60)
-                    self.update_progress(f"生成中... {i+1}/10 (seed={seed})", progress)
+                    self.update_progress(f"生成中... {i+1}/100 (seed={seed}, speed={cloner.speed})", progress)
 
                     success = cloner.generate_voice(
                         test_text,
@@ -188,7 +188,7 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                     )
 
                     if success:
-                        print(f"生成成功: {filename}")
+                        print(f"生成成功: {filename} (seed={seed}, speed={cloner.speed})")
                     else:
                         print(f"生成失败: {filename}")
 
