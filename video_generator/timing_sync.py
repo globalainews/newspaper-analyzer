@@ -29,79 +29,59 @@ class TimingSynchronizer:
         Returns:
             修改后的draft_content
         """
-        print("=" * 60)
         print("开始同步语音文件时长...")
-        print("=" * 60)
-        
+
         text_reading_dir = os.path.join(draft_dir, 'textReading')
-        print(f"[调试] textReading目录: {text_reading_dir}")
-        print(f"[调试] 目录是否存在: {os.path.exists(text_reading_dir)}")
-        
-        # 检查textReading目录是否存在
+
         if not os.path.exists(text_reading_dir):
-            print(f"[警告] textReading目录不存在: {text_reading_dir}")
+            print(f"[警告] textReading目录不存在")
             return draft_content
-        
-        # 查找所有audio*.wav文件
+
         audio_files = []
         for filename in os.listdir(text_reading_dir):
             if filename.startswith('audio') and filename.endswith('.wav'):
                 audio_files.append(filename)
-        
-        audio_files.sort()  # 按文件名排序
-        
+
+        audio_files.sort()
+
         if not audio_files:
-            print(f"[警告] textReading目录下没有找到audio*.wav文件")
-            print(f"[调试] 目录内容: {os.listdir(text_reading_dir)}")
+            print(f"[警告] 没有找到audio*.wav文件")
             return draft_content
-        
-        print(f"[步骤1] 找到 {len(audio_files)} 个语音文件:")
-        
-        # 获取每个语音文件的时长
+
         audio_durations = {}
-        
-        # 尝试使用soundfile读取
+
         try:
             import soundfile as sf
             use_soundfile = True
-            print("[调试] 使用soundfile读取音频时长")
         except ImportError:
             use_soundfile = False
-            print("[调试] soundfile不可用，尝试使用wave")
-        
+
         for audio_file in audio_files:
             audio_path = os.path.join(text_reading_dir, audio_file)
             try:
                 if use_soundfile:
-                    # 使用soundfile读取
                     info = sf.info(audio_path)
                     duration_seconds = info.duration
                 else:
-                    # 使用wave读取
                     import wave
                     with wave.open(audio_path, 'rb') as wf:
                         frames = wf.getnframes()
                         rate = wf.getframerate()
                         duration_seconds = frames / float(rate)
-                
-                # 转换为微秒（项目使用微秒作为时间单位）
+
                 duration_us = int(duration_seconds * 1000000)
                 audio_durations[audio_file] = {
                     'seconds': duration_seconds,
                     'microseconds': duration_us
                 }
-                print(f"  {audio_file}: {duration_seconds:.2f}秒 ({duration_us}微秒)")
             except Exception as e:
-                print(f"  [错误] 读取 {audio_file} 失败: {str(e)}")
+                print(f"[错误] 读取 {audio_file} 失败: {str(e)}")
         
         # 更新draft_content中的audios素材和segments
         materials = draft_content.get('materials', {})
         audios = materials.get('audios', [])
         tracks = draft_content.get('tracks', [])
-        
-        print(f"\n[步骤2] 匹配并更新audios素材和对应的segments...")
-        
-        updated_count = 0
+
         for audio in audios:
             audio_type = audio.get('type', '')
             audio_name = audio.get('name', '')
@@ -119,45 +99,24 @@ class TimingSynchronizer:
                     break
             
             if matched_file:
-                old_duration = audio.get('duration', 0)
-                new_duration = audio_durations[matched_file]['microseconds']
-                duration_sec = audio_durations[matched_file]['seconds']
-                
-                audio['duration'] = new_duration
-                
-                print(f"  [更新] {audio_name}: {old_duration/1e6:.2f}秒 → {duration_sec:.2f}秒")
-                updated_count += 1
-                
-                # 同时更新对应的segments中的target_timerange和source_timerange
+                audio['duration'] = audio_durations[matched_file]['microseconds']
+
                 for track in tracks:
                     segments = track.get('segments', [])
                     for segment in segments:
                         material_id = segment.get('material_id')
                         if material_id == audio_id:
-                            # 更新target_timerange
                             target_timerange = segment.get('target_timerange', {})
-                            old_target_duration = target_timerange.get('duration', 0)
-                            target_timerange['duration'] = new_duration
-                            
-                            # 更新source_timerange
+                            target_timerange['duration'] = audio_durations[matched_file]['microseconds']
+
                             source_timerange = segment.get('source_timerange')
                             if source_timerange is None:
                                 source_timerange = {}
                                 segment['source_timerange'] = source_timerange
-                            old_source_duration = source_timerange.get('duration', 0)
-                            source_timerange['duration'] = new_duration
-                            
-                            print(f"  [同步] material_id={material_id}: target_timerange.duration {old_target_duration} → {new_duration}")
-                            print(f"  [同步] material_id={material_id}: source_timerange.duration {old_source_duration} → {new_duration}")
-        
-        print(f"\n共更新 {updated_count} 个音频素材的duration")
-        print(f"\nsegments中的target_timerange和source_timerange同步完成")
-        print("=" * 60)
-        print("语音文件时长同步完成")
-        print("=" * 60)
+                            source_timerange['duration'] = audio_durations[matched_file]['microseconds']
 
         return draft_content
-    
+
     def sync_tts_and_subtitles(self, draft_content, news_data=None):
         """
         同步TTS音频和字幕的时序
@@ -175,10 +134,8 @@ class TimingSynchronizer:
             修改后的draft_content
         """
         import copy
-        
-        print("=" * 60)
+
         print("开始同步TTS音频和字幕时序...")
-        print("=" * 60)
         
         # 深拷贝，避免修改原始数据
         data = copy.deepcopy(draft_content)
@@ -192,15 +149,13 @@ class TimingSynchronizer:
                     from PIL import Image
                     with Image.open(self.current_image_file) as img:
                         orig_image_width, orig_image_height = img.size
-                        print(f"[信息] 图片原始尺寸: {orig_image_width}x{orig_image_height}")
-                except Exception as e:
-                    print(f"[警告] 无法读取图片尺寸: {e}")
+                except Exception:
+                    pass
             
             # 获取materials中的audios
             materials = data.get('materials', {})
             audios = materials.get('audios', [])
-            print(f"[步骤1] 从materials中获取到 {len(audios)} 个音频素材")
-            
+
             # 查找所有type为"text_to_audio"的TTS音频素材
             tts_audios = []
             for idx, audio in enumerate(audios):
@@ -213,165 +168,97 @@ class TimingSynchronizer:
                         'text_id': audio.get('text_id')
                     }
                     tts_audios.append(tts_info)
-                    print(f"  [TTS-{len(tts_audios)}] ID={tts_info['id']}, resource_id={tts_info['resource_id']}, text_id={tts_info['text_id']}, duration={tts_info['duration']}")
-            
+
             if not tts_audios:
-                print("[错误] 未找到text_to_audio类型的音频素材")
+                print("[错误] 未找到TTS音频素材")
                 return data
-            
-            print(f"[步骤2] 找到 {len(tts_audios)} 个TTS音频素材")
-            
+
             # 获取tracks
             tracks = data.get('tracks', [])
-            print(f"[步骤3] 获取到 {len(tracks)} 个轨道")
-            
-            # 查找所有文本轨道(type: "text")、所有音频轨道(type: "audio")和所有贴纸轨道(type: "sticker")
+
+            # 查找所有文本轨道、音频轨道和贴纸轨道
             text_tracks = []
             audio_tracks = []
             sticker_tracks = []
-            
+
             for idx, track in enumerate(tracks):
                 track_type = track.get('type')
-                seg_count = len(track.get('segments', []))
-                print(f"  [轨道-{idx+1}] type={track_type}, segments={seg_count}")
                 if track_type == 'text':
                     text_tracks.append(track)
                 elif track_type == 'audio':
                     audio_tracks.append(track)
                 elif track_type == 'sticker':
                     sticker_tracks.append(track)
-            
-            if not text_tracks:
-                print("[错误] 未找到文本轨道(type: text)")
+
+            if not text_tracks or not audio_tracks:
+                print("[错误] 未找到必要的轨道")
                 return data
-            print(f"[步骤4] 找到 {len(text_tracks)} 个文本轨道")
-            
-            if not audio_tracks:
-                print("[错误] 未找到音频轨道(type: audio)")
-                return data
-            print(f"[步骤5] 找到 {len(audio_tracks)} 个音频轨道")
-            
-            print(f"[步骤6] 找到 {len(sticker_tracks)} 个贴纸轨道")
-            
-            # 获取所有文本片段（从所有文本轨道中）
+
+            # 获取所有文本片段
             text_segments = []
-            print(f"[步骤6] 从所有文本轨道中获取文本片段:")
-            for track_idx, track in enumerate(text_tracks):
-                track_segments = track.get('segments', [])
-                print(f"  [文本轨道-{track_idx+1}] 包含 {len(track_segments)} 个片段")
-                for seg_idx, seg in enumerate(track_segments):
-                    seg_id = seg.get('id')
-                    print(f"    [片段-{seg_idx+1}] id={seg_id}")
-                text_segments.extend(track_segments)
-            print(f"  总计获取到 {len(text_segments)} 个文本片段")
+            for track in text_tracks:
+                text_segments.extend(track.get('segments', []))
             
-            # 建立text_id到文本片段的映射（包含原始顺序）
+            # 建立text_id到文本片段的映射
             text_segment_map = {}
-            print(f"[步骤7] 建立text_id到文本片段的映射（包含原始顺序）:")
-            print(f"  TTS音频的text_id列表: {[tts.get('text_id') for tts in tts_audios]}")
             for idx, segment in enumerate(text_segments):
                 seg_id = segment.get('id')
-                timerange = segment.get('target_timerange', {})
-                start = timerange.get('start', 0)
-                duration = timerange.get('duration', 0)
-                text_to_audio_ids = segment.get('text_to_audio_ids', [])
-                material_id = segment.get('material_id')
-                # 输出文本片段的所有关键字段
-                print(f"  [文本-{idx+1}] id={seg_id}, start={start}, duration={duration}, text_to_audio_ids={text_to_audio_ids}, material_id={material_id}")
                 if seg_id:
                     text_segment_map[seg_id] = {
                         'segment': segment,
-                        'original_order': idx  # 记录原始顺序
+                        'original_order': idx
                     }
-            print(f"  共建立 {len(text_segment_map)} 个文本片段映射")
-            print(f"  文本映射中的id列表: {list(text_segment_map.keys())}")
-            
-            # 获取所有音频片段（从所有音频轨道中）
+
+            # 获取所有音频片段和贴纸片段
             audio_segments = []
             for track in audio_tracks:
                 audio_segments.extend(track.get('segments', []))
-            print(f"[步骤8] 从所有音频轨道中获取到 {len(audio_segments)} 个音频片段")
-            
-            # 获取所有贴纸片段（从所有贴纸轨道中）
+
             sticker_segments = []
             for track in sticker_tracks:
                 sticker_segments.extend(track.get('segments', []))
-            print(f"[步骤9] 从所有贴纸轨道中获取到 {len(sticker_segments)} 个贴纸片段")
-            
-            # 收集所有text_to_audio类型的音频片段（不管属于哪个track）
-            print(f"[步骤8.5] 收集并排序text_to_audio类型的音频片段:")
+
+            # 收集text_to_audio类型的音频片段
             text_to_audio_segments = []
             tts_ids = [tts.get('id') for tts in tts_audios]
-            print(f"  TTS音频ID列表: {tts_ids}")
-            
-            for idx, segment in enumerate(audio_segments):
+
+            for segment in audio_segments:
                 material_id = segment.get('material_id')
                 if material_id and material_id in tts_ids:
                     timerange = segment.get('target_timerange', {})
-                    start = timerange.get('start', 0)
-                    duration = timerange.get('duration', 0)
                     text_to_audio_segments.append({
                         'segment': segment,
-                        'start': start,
-                        'duration': duration,
+                        'start': timerange.get('start', 0),
+                        'duration': timerange.get('duration', 0),
                         'material_id': material_id
                     })
-                    print(f"  [TTS音频片段-{len(text_to_audio_segments)}] material_id={material_id}, start={start}, duration={duration}")
-            
+
             # 按开始时间排序
             text_to_audio_segments.sort(key=lambda x: x['start'])
-            print(f"  排序后的text_to_audio音频片段顺序:")
-            for idx, item in enumerate(text_to_audio_segments):
-                print(f"  [排序-{idx+1}] material_id={item['material_id']}, start={item['start']}, duration={item['duration']}")
-            print(f"  共 {len(text_to_audio_segments)} 个text_to_audio音频片段")
-            
-            # 建立material_id到音频片段的映射（一个material_id可能对应多个片段）
+
+            # 建立material_id到音频片段的映射
             audio_segment_map = {}
-            print(f"[步骤9] 建立material_id到音频片段的映射:")
-            print(f"  TTS音频的resource_id列表: {[tts.get('resource_id') for tts in tts_audios]}")
-            for idx, segment in enumerate(audio_segments):
+            for segment in audio_segments:
                 material_id = segment.get('material_id')
-                timerange = segment.get('target_timerange', {})
-                start = timerange.get('start', 0)
-                duration = timerange.get('duration', 0)
-                # 输出音频片段的所有关键字段
-                print(f"  [音频-{idx+1}] material_id={material_id}, start={start}, duration={duration}")
                 if material_id:
-                    # 使用列表存储，因为一个material_id可能对应多个片段
                     if material_id not in audio_segment_map:
                         audio_segment_map[material_id] = []
                     audio_segment_map[material_id].append(segment)
-            print(f"  共建立 {len(audio_segment_map)} 个material_id映射")
-            print(f"  音频映射中的material_id列表: {list(audio_segment_map.keys())}")
-            
-            # 按时间顺序排序贴纸片段（用于与文本片段对应）
-            print(f"[步骤12] 按时间顺序排序贴纸片段:")
+
+            # 按时间顺序排序贴纸片段
             sorted_sticker_segments = []
-            for idx, segment in enumerate(sticker_segments):
-                material_id = segment.get('material_id')
+            for segment in sticker_segments:
                 timerange = segment.get('target_timerange', {})
-                start = timerange.get('start', 0)
-                duration = timerange.get('duration', 0)
-                # 输出贴纸片段的所有关键字段
-                print(f"  [贴纸-{idx+1}] material_id={material_id}, start={start}, duration={duration}")
                 sorted_sticker_segments.append({
                     'segment': segment,
-                    'start': start
+                    'start': timerange.get('start', 0)
                 })
-            
+
             # 按start时间排序
             sorted_sticker_segments.sort(key=lambda x: x['start'])
-            print(f"  排序后的贴纸片段顺序:")
-            for idx, item in enumerate(sorted_sticker_segments):
-                segment = item['segment']
-                material_id = segment.get('material_id')
-                start = item['start']
-                print(f"  [排序-{idx+1}] material_id={material_id}, start={start}")
-            print(f"  共找到 {len(sorted_sticker_segments)} 个贴纸片段")
-                
-                # 建立material_id到贴纸片段的映射（一个material_id可能对应多个片段）
+
+            # 建立material_id到贴纸片段的映射
             sticker_segment_map = {}
-            print(f"  建立material_id到贴纸片段的映射:")
             for item in sorted_sticker_segments:
                 segment = item['segment']
                 material_id = segment.get('material_id')
@@ -379,11 +266,6 @@ class TimingSynchronizer:
                     if material_id not in sticker_segment_map:
                         sticker_segment_map[material_id] = []
                     sticker_segment_map[material_id].append(segment)
-            print(f"  共建立 {len(sticker_segment_map)} 个material_id映射")
-            print(f"  贴纸映射中的material_id列表: {list(sticker_segment_map.keys())}")
-            
-            # 按text_to_audio音频片段的开始时间排序
-            print(f"[步骤10] 按text_to_audio音频片段的开始时间排序:")
             
             # 建立tts_id到原始开始时间的映射
             tts_id_to_original_start = {}
@@ -391,34 +273,30 @@ class TimingSynchronizer:
                 material_id = item.get('material_id')
                 start = item.get('start', 0)
                 tts_id_to_original_start[material_id] = start
-            
+
             # 为TTS音频添加原始开始时间
             tts_with_order = []
-            for idx, tts in enumerate(tts_audios):
+            for tts in tts_audios:
                 tts_id = tts.get('id')
                 original_start = tts_id_to_original_start.get(tts_id, 0)
                 tts_with_order.append({
                     **tts,
                     'original_start': original_start
                 })
-                print(f"  [TTS-{idx+1}] id={tts_id}, original_start={original_start}")
 
             # 按原始开始时间排序
             tts_with_order.sort(key=lambda x: x['original_start'])
-            print(f"[步骤11] 排序后的TTS音频顺序:")
-            for idx, tts in enumerate(tts_with_order):
-                print(f"  [排序-{idx+1}] id={tts['id']}, text_id={tts['text_id']}, original_start={tts['original_start']}")
-            
+
             # 重新计算TTS音频的时序
-            # 间隔: 0.8秒 = 800,000微秒
-            gap_us = 800000  # 微秒
-            current_time = 0
-            
-            print(f"[步骤12] 重新计算TTS音频时序 (间隔={gap_us}微秒=0.8秒):")
-            
+            gap_us = 800000  # 0.8秒间隔
+
+            # 获取第一条音频的原始起始时间作为基准
+            base_start = tts_with_order[0].get('original_start', 0) if tts_with_order else 0
+            current_time = base_start
+
             # 存储新的时间信息
             new_timing = []
-            for idx, tts in enumerate(tts_with_order):
+            for tts in tts_with_order:
                 duration = tts.get('duration', 0)
                 new_timing.append({
                     'id': tts.get('id'),
@@ -427,24 +305,15 @@ class TimingSynchronizer:
                     'new_start': current_time,
                     'new_duration': duration
                 })
-                print(f"  [计算-{idx+1}] id={tts.get('id')}, new_start={current_time}, duration={duration}")
-                # 下一个音频的起始时间 = 当前起始时间 + 当前时长 + 间隔
                 current_time += duration + gap_us
-            
-            print(f"[步骤13] 共重新排布 {len(new_timing)} 个TTS音频片段")
-            
+
             # 计算视频素材的起始和结束时间
-            video_start_time = current_time  # 最后一个音频结束后+0.8秒
-            print(f"[步骤17] 计算视频素材时间: start={video_start_time}")
-            print(f"  最后一个音频的结束时间: {current_time - gap_us} (不包含0.8秒间隔)")
-            print(f"  视频素材开始时间: {video_start_time} (包含0.8秒间隔)")
-            
-            # 更新音频轨道中的TTS片段（按照排序后的text_to_audio音频片段顺序）
-            print(f"[步骤14] 更新音频轨道中的TTS片段:")
-            print(f"  音频映射中的material_id列表: {list(audio_segment_map.keys())}")
-            print(f"  使用TTS音频的id进行匹配")
+            video_start_time = current_time
+            total_video_duration = current_time - base_start
+
+            # 更新音频轨道中的TTS片段
             update_count = 0
-            
+
             # 建立tts_id到timing的映射
             tts_id_to_timing = {}
             for timing in new_timing:
@@ -453,234 +322,229 @@ class TimingSynchronizer:
                     tts_id_to_timing[tts_id] = timing
             
             # 按照排序后的text_to_audio音频片段顺序进行处理
-            for idx, item in enumerate(text_to_audio_segments):
+            for item in text_to_audio_segments:
                 segment = item['segment']
                 material_id = segment.get('material_id')
-                
-                # 检查这个音频片段是否是TTS音频
+
                 if material_id and material_id in tts_id_to_timing:
                     timing = tts_id_to_timing[material_id]
-                    old_start = segment.get('target_timerange', {}).get('start', 0)
-                    old_duration = segment.get('target_timerange', {}).get('duration', 0)
-                    
-                    # 更新target_timerange
+
                     if 'target_timerange' not in segment:
                         segment['target_timerange'] = {}
                     segment['target_timerange']['start'] = timing.get('new_start', 0)
                     segment['target_timerange']['duration'] = timing.get('new_duration', 0)
-                    
+
                     update_count += 1
-                    print(f"  [音频更新-{update_count}] material_id={material_id}")
-                    print(f"    旧: start={old_start}, duration={old_duration}")
-                    print(f"    新: start={timing.get('new_start')}, duration={timing.get('new_duration')}")
-                
-            print(f"  共更新 {update_count} 个音频片段")
-            
+
             # 更新文本轨道中的字幕片段
-            print(f"[步骤15] 更新文本轨道中的字幕片段:")
-            print(f"  文本映射中的id列表: {list(text_segment_map.keys())}")
-            print(f"  使用TTS音频的text_id匹配文本片段的material_id")
-            
-            # 建立material_id到文本片段的映射
             material_to_text_map = {}
             for seg_id, seg_info in text_segment_map.items():
                 seg = seg_info.get('segment', {})
                 material_id = seg.get('material_id')
                 if material_id:
                     material_to_text_map[material_id] = seg
-            print(f"  建立material_id到文本片段的映射: {list(material_to_text_map.keys())}")
-            
-            # 存储文本片段的位置信息，用于贴纸定位
+
             text_position_map = {}
             update_count = 0
             for idx, timing in enumerate(new_timing):
-                # 使用TTS音频的text_id（不是id）来匹配文本片段的material_id
                 text_id = timing.get('text_id')
-                print(f"  [处理-{idx+1}] 查找text_id={text_id}（匹配文本片段的material_id）")
                 if text_id and text_id in material_to_text_map:
                     text_seg = material_to_text_map[text_id]
-                    old_start = text_seg.get('target_timerange', {}).get('start', 0)
-                    old_duration = text_seg.get('target_timerange', {}).get('duration', 0)
-                    old_material_id = text_seg.get('material_id')
-                    # 更新target_timerange
+
                     if 'target_timerange' not in text_seg:
                         text_seg['target_timerange'] = {}
                     text_seg['target_timerange']['start'] = timing.get('new_start', 0)
                     text_seg['target_timerange']['duration'] = timing.get('new_duration', 0)
-                    
-                    # 确保material_id和text_to_audio_ids与TTS音频素材的id一致
+
                     tts_id = timing.get('id')
                     if 'text_to_audio_ids' not in text_seg:
                         text_seg['text_to_audio_ids'] = []
                     if tts_id not in text_seg['text_to_audio_ids']:
                         text_seg['text_to_audio_ids'].append(tts_id)
-                    
-                    # 存储文本片段的位置信息
+
                     position = text_seg.get('position', {})
                     size = text_seg.get('size', {})
                     text_position_map[idx] = {
                         'position': position,
                         'size': size
                     }
-                    print(f"  文本片段位置: position={position}, size={size}")
-                    
+
                     update_count += 1
-                    print(f"  [字幕更新-{update_count}] text_id={text_id}")
-                    print(f"    旧: start={old_start}, duration={old_duration}, material_id={old_material_id}")
-                    print(f"    新: start={timing.get('new_start')}, duration={timing.get('new_duration')}, material_id={tts_id}")
-                else:
-                    print(f"  [字幕跳过-{idx+1}] text_id={text_id} 未在material_id映射中找到")
-                    print(f"    可用的material_id: {list(material_to_text_map.keys())}")
-            print(f"  共更新 {update_count} 个字幕片段")
             
+            # 计算最后一个字幕的结束时间 + 0.4 秒
+            last_subtitle_end = 0
+            for timing in new_timing:
+                subtitle_end = timing.get('new_start', 0) + timing.get('new_duration', 0)
+                if subtitle_end > last_subtitle_end:
+                    last_subtitle_end = subtitle_end
+            gap_04s = 400000
+            last_position_start = last_subtitle_end + gap_04s
+            print(f"[调试] last_subtitle_end={last_subtitle_end}, gap_04s={gap_04s}, last_position_start={last_position_start}")
+
+            # 直接在 tracks 中查找 segment.material_id 对应的素材
+            # 找到所有 local_id="最后位置" 或 name="最后位置" 的素材 id
+            materials = data.get('materials', {})
+            last_position_ids = []
+            for material_type in ['videos', 'audios', 'texts', 'stickers', 'images', 'effects']:
+                type_list = materials.get(material_type, [])
+                for item in type_list:
+                    if item.get('local_id') == '最后位置' or item.get('name') == '最后位置':
+                        last_position_ids.append(item.get('id'))
+            print(f"[调试] 找到 {len(last_position_ids)} 个'最后位置'素材: {last_position_ids}")
+
+            # 在 tracks 中查找这些素材对应的 segment
+            tracks = data.get('tracks', [])
+            for track_idx, track in enumerate(tracks):
+                segments = track.get('segments', [])
+                for seg_idx, segment in enumerate(segments):
+                    material_id = segment.get('material_id', '')
+                    if material_id in last_position_ids:
+                        segment_duration = segment.get('target_timerange', {}).get('duration', 0)
+                        old_start = segment.get('target_timerange', {}).get('start', 0)
+                        segment['target_timerange']['start'] = last_position_start
+                        print(f"[已更新] 轨道{track_idx} 片段{seg_idx}: start {old_start} → {last_position_start}, segment_duration={segment_duration}")
+                        total_video_duration = last_position_start + segment_duration
+                        print(f"[调试] 总时长 = {last_position_start} + {segment_duration} = {total_video_duration}")
+
             # 收集所有贴纸片段并按时间排序
             all_sticker_segments = []
             for track in sticker_tracks:
                 for seg in track.get('segments', []):
                     timerange = seg.get('target_timerange', {})
-                    start = timerange.get('start', 0)
                     all_sticker_segments.append({
                         'segment': seg,
-                        'start': start
+                        'start': timerange.get('start', 0)
                     })
-            
-            # 按开始时间排序
+
+            stickers_materials = materials.get('stickers', [])
+            material_id_to_name = {}
+            for sticker in stickers_materials:
+                material_id_to_name[sticker.get('id', '')] = sticker.get('name', '')
+
             sorted_sticker_segments = sorted(all_sticker_segments, key=lambda x: x['start'])
-            print(f"[步骤16] 收集并排序贴纸片段: 共 {len(sorted_sticker_segments)} 个")
-            
-            # 更新贴纸轨道中的贴纸片段（与文本片段对齐，按时间顺序对应）
-            print(f"[步骤19] 更新贴纸轨道中的贴纸片段:")
-            print(f"  按时间顺序与TTS音频对应，并定位到新闻矩形框左下角")
-            
+
             update_count = 0
             for idx, timing in enumerate(new_timing):
-                if idx < len(sorted_sticker_segments):
-                    # 按顺序对应：第1个TTS音频对应第1个贴纸片段，以此类推
-                    sticker_item = sorted_sticker_segments[idx]
+                found_matching_sticker = False
+                for si in range(len(sorted_sticker_segments)):
+                    sticker_item = sorted_sticker_segments[si]
                     sticker_seg = sticker_item['segment']
-                    material_id = sticker_seg.get('material_id')
-                    old_start = sticker_seg.get('target_timerange', {}).get('start', 0)
-                    old_duration = sticker_seg.get('target_timerange', {}).get('duration', 0)
-                    
-                    # 更新target_timerange，与对应TTS音频保持一致
+                    material_id = sticker_seg.get('material_id', '')
+                    sticker_name = material_id_to_name.get(material_id, '')
+
+                    if sticker_name != "春日晴天-卡通太阳遮挡":
+                        continue
+
+                    found_matching_sticker = True
+
                     if 'target_timerange' not in sticker_seg:
                         sticker_seg['target_timerange'] = {}
                     sticker_seg['target_timerange']['start'] = timing.get('new_start', 0)
                     sticker_seg['target_timerange']['duration'] = timing.get('new_duration', 0)
-                    
-                    # 使用transform方式定位贴纸到对应新闻矩形框的中心
+
                     if news_data and idx < len(news_data):
                         news = news_data[idx]
-                        # 新闻位置格式: [x1, y1, x2, y2]
                         position = news.get('position', [0, 0, 0, 0])
                         if len(position) == 4:
                             x1, y1, x2, y2 = position
-                            # 计算新闻矩形框中心点
                             news_center_x = (x1 + x2) / 2
                             news_center_y = (y1 + y2) / 2
-                            
-                            # 获取报纸类型和配置
+
                             newspaper_type = self._detect_newspaper_type(news)
                             video_width, video_height = self._get_video_dimensions()
                             paper_config = self._get_newspaper_config(newspaper_type)
-                            
-                            # 计算贴纸在视频中的transform位置（比例值）
+
                             transform_x, transform_y = self._calculate_sticker_transform(
                                 news_center_x, news_center_y,
                                 paper_config, video_width, video_height,
                                 orig_image_width, orig_image_height
                             )
-                            
-                            # 更新贴纸的transform
+
                             if 'clip' not in sticker_seg:
                                 sticker_seg['clip'] = {}
                             if 'transform' not in sticker_seg['clip']:
                                 sticker_seg['clip']['transform'] = {}
-                            
+
                             sticker_seg['clip']['transform']['x'] = transform_x
                             sticker_seg['clip']['transform']['y'] = transform_y
-                            
-                            print(f"  贴纸transform定位: x={transform_x:.6f}, y={transform_y:.6f}")
-                            print(f"  新闻中心点: ({news_center_x}, {news_center_y})")
-                            print(f"  新闻位置: {position}")
-                            print(f"  报纸类型: {newspaper_type}")
-                    
+
                     update_count += 1
-                    print(f"  [贴纸更新-{update_count}] 顺序对应 TTS-{idx+1} -> 贴纸-{idx+1}")
-                    print(f"    贴纸material_id={material_id}")
-                    print(f"    旧: start={old_start}, duration={old_duration}")
-                    print(f"    新: start={timing.get('new_start')}, duration={timing.get('new_duration')}")
-                else:
-                    print(f"  [贴纸跳过-{idx+1}] 没有更多贴纸片段可用")
-            print(f"  共更新 {update_count} 个贴纸片段")
-            
+                    sorted_sticker_segments.pop(si)
+                    break
+
+            # 处理 photo 素材（P1.jpg, P2.jpg 等）的位置
+            photos_to_align = []
+            videos_list = materials.get('videos', [])
+            for video in videos_list:
+                material_name = video.get('material_name', '')
+                if material_name and material_name.startswith('P') and material_name.endswith('.jpg'):
+                    import re
+                    if re.match(r'^P\d+\.jpg$', material_name):
+                        photos_to_align.append({
+                            'id': video.get('id'),
+                            'material_name': material_name,
+                            'item': video,
+                        })
+
+            photos_to_align.sort(key=lambda x: x['material_name'])
+
+            # 计算每个 photo 的位置
+            gap_04s = 400000
+            if photos_to_align and new_timing:
+                for idx_photo, photo_info in enumerate(photos_to_align):
+                    photo_id = photo_info['id']
+                    photo_item = photo_info['item']
+
+                    if idx_photo < len(new_timing):
+                        timing = new_timing[idx_photo]
+                        audio_start = timing.get('new_start', 0)
+                        audio_end = audio_start + timing.get('new_duration', 0)
+                        new_end = audio_end + gap_04s
+
+                        for track in data.get('tracks', []):
+                            for segment in track.get('segments', []):
+                                if segment.get('material_id') == photo_id:
+                                    old_seg_start = segment.get('target_timerange', {}).get('start', 0)
+                                    old_seg_duration = segment.get('target_timerange', {}).get('duration', 0)
+
+                                    if idx_photo == 0:
+                                        new_start = old_seg_start
+                                        new_duration = new_end - old_seg_start
+                                        segment['target_timerange']['start'] = new_start
+                                        segment['target_timerange']['duration'] = new_duration
+                                    else:
+                                        new_start = audio_start
+                                        new_duration = new_end - new_start
+                                        segment['target_timerange']['start'] = new_start
+                                        segment['target_timerange']['duration'] = new_duration
+
+                                    photo_item['duration'] = new_duration
+                                    break
+
             # 处理视频素材
-            print("=" * 60)
-            print("开始处理视频素材...")
-            print("=" * 60)
-            
-            # 1. 找到 local_material_id 为 "adfc1f13-688a-4cce-8472-3b31aa079b30" 的素材
             video_material_local_id = "adfc1f13-688a-4cce-8472-3b31aa079b30"
             target_video_id = "E42351AB-2F8B-4159-9C19-7CD524DD53C8"
-            
-            # 查找视频素材的duration和id
+
             video_duration = 0
             video_material_id = None
-            materials = data.get('materials', {})
             videos = materials.get('videos', [])
-            print(f"[步骤20] 查找视频素材: local_material_id={video_material_local_id}")
             for video in videos:
                 if video.get('local_material_id') == video_material_local_id:
                     video_duration = video.get('duration', 0)
                     video_material_id = video.get('id')
-                    print(f"  找到视频素材，id={video_material_id}, duration={video_duration}")
                     break
-            
+
             if video_duration > 0 and video_material_id:
-                # 2. 计算视频素材的结束时间
                 video_end_time = video_start_time + video_duration
-                print(f"[步骤21] 视频素材时间: start={video_start_time}, duration={video_duration}, end={video_end_time}")
-                
-                # 3. 查找并更新"更多内容在评论区.mp4"视频素材的时间
-                # 金融时报0318.jpg将在后面的统一对齐代码中处理
-                print(f"[步骤22] 查找并更新'更多内容在评论区.mp4'视频素材片段")
-                print(f"[步骤23] 查找并更新视频素材片段")
                 video_material_updated = False
-                
-                # 检查所有类型的轨道，不仅仅是视频轨道
+
                 for track_idx, track in enumerate(data.get('tracks', [])):
-                    track_type = track.get('type')
                     segments = track.get('segments', [])
-                    print(f"  轨道 {track_idx+1} (类型: {track_type}) 包含 {len(segments)} 个片段")
-                    
-                    for seg_idx, segment in enumerate(segments):
-                        seg_id = segment.get('id')
+                    for segment in segments:
                         seg_material_id = segment.get('material_id')
-                        seg_material_name = segment.get('material_name', '')
-                        seg_timerange = segment.get('target_timerange', {})
-                        seg_start = seg_timerange.get('start', 0)
-                        seg_duration = seg_timerange.get('duration', 0)
-                        print(f"    片段 {seg_idx+1}: id={seg_id}, material_id={seg_material_id}, material_name={seg_material_name}, start={seg_start}, duration={seg_duration}")
-                        
-                        # 尝试多种匹配方式
                         if seg_material_id == video_material_id:
-                            old_start = seg_start
-                            old_duration = seg_duration
-                            old_end = old_start + old_duration
-                            new_end = video_start_time + video_duration
-                            
-                            if 'target_timerange' not in segment:
-                                segment['target_timerange'] = {}
                             segment['target_timerange']['start'] = video_start_time
                             segment['target_timerange']['duration'] = video_duration
-                            
-                            print(f"  [视频素材更新] material_id={video_material_id}")
-                            print(f"    旧位置: start={old_start}, duration={old_duration}, end={old_end}")
-                            print(f"    新位置: start={video_start_time}, duration={video_duration}, end={new_end}")
-                            print(f"    计算的开始时间: {video_start_time}")
-                            print(f"    计算的结束时间: {new_end}")
-                            print(f"    轨道类型: {track_type}")
-                            print(f"    素材名称: {seg_material_name}")
                             video_material_updated = True
                             break
                     if video_material_updated:
@@ -688,41 +552,7 @@ class TimingSynchronizer:
                 
                 if not video_material_updated:
                     print(f"[警告] 未找到视频素材片段: material_id={video_material_id}")
-                    print("  尝试查找所有轨道中的所有片段...")
-                    for track_idx, track in enumerate(data.get('tracks', [])):
-                        track_type = track.get('type')
-                        segments = track.get('segments', [])
-                        print(f"  轨道 {track_idx+1} (类型: {track_type}):")
-                        for segment in segments:
-                            print(f"    片段: id={segment.get('id')}, material_id={segment.get('material_id')}")
-                    
-                    # 检查materials中的videos
-                    print("  检查materials中的videos...")
-                    materials = data.get('materials', {})
-                    videos = materials.get('videos', [])
-                    print(f"  找到 {len(videos)} 个视频素材:")
-                    for idx, video in enumerate(videos):
-                        print(f"    视频 {idx+1}: local_material_id={video.get('local_material_id')}, id={video.get('id')}")
                 else:
-                    # 两个视频素材都已更新，输出同步确认信息
-                    print("=" * 60)
-                    print("[视频对齐确认]")
-                    print(f"  视频素材1 (更多内容在评论区.mp4):")
-                    print(f"    material_id: {video_material_id}")
-                    print(f"    开始时间: {video_start_time}")
-                    print(f"    结束时间: {video_end_time}")
-                    print(f"  视频素材2 (金融时报0318.jpg):")
-                    print(f"    material_id: {target_video_id}")
-                    print(f"    结束时间对齐到: {video_end_time}")
-                    print(f"  ✓ 两个视频素材的结束时间已对齐")
-                    print("=" * 60)
-                    
-                    # 对齐其他素材的结束时间（开始时间不变，调整duration）
-                    print("=" * 60)
-                    print("开始对齐其他素材的结束时间...")
-                    print("=" * 60)
-                    
-                    # 定义需要对齐的素材列表
                     materials_to_align = [
                         {"type": "audio", "id": "0375B918-9C67-4dad-A791-E8DF540B04A4", "name": "新品发布"},
                         {"type": "audio", "id": "4C5380AE-3F65-488f-B887-C977206F83E8", "name": "时尚商务节奏 企业"},
@@ -731,139 +561,109 @@ class TimingSynchronizer:
                         {"type": "text", "id": "F2A47FCE-BA46-402b-8EC2-FFA641BA706C", "name": "文本3"},
                         {"type": "video", "id": "E42351AB-2F8B-4159-9C19-7CD524DD53C8", "name": "金融时报0318.jpg"}
                     ]
-                    
+
                     for material_info in materials_to_align:
                         material_id = material_info["id"]
-                        material_name = material_info["name"]
                         material_type = material_info["type"]
-                        
-                        print(f"[对齐] {material_name} (material_id: {material_id}, type: {material_type})")
-                        
-                        # 在所有轨道中查找引用该素材的片段
-                        found = False
-                        processed_segments = 0
-                        
-                        for track_idx, track in enumerate(data.get('tracks', [])):
-                            track_type = track.get('type', 'unknown')
+
+                        for track in data.get('tracks', []):
                             segments = track.get('segments', [])
-                            print(f"  检查轨道 {track_idx} (类型: {track_type})，包含 {len(segments)} 个片段")
-                            
-                            for seg_idx, segment in enumerate(segments):
+                            for segment in segments:
                                 seg_material_id = segment.get('material_id')
-                                print(f"    片段 {seg_idx}: material_id={seg_material_id}")
-                                
                                 if seg_material_id == material_id:
-                                    # 找到片段，调整duration使结束时间对齐
                                     old_start = segment.get('target_timerange', {}).get('start', 0)
-                                    old_duration = segment.get('target_timerange', {}).get('duration', 0)
-                                    old_end = old_start + old_duration
-                                    
-                                    # 计算新的duration：保持开始时间不变，结束时间对齐到video_end_time
                                     new_duration = video_end_time - old_start
-                                    new_end = old_start + new_duration
-                                    
-                                    if 'target_timerange' not in segment:
-                                        segment['target_timerange'] = {}
+
                                     segment['target_timerange']['duration'] = new_duration
-                                    
-                                    # 对于音频素材，同时调整source_timerange的duration，使其与target_timerange一致
+
                                     if material_type == 'audio':
-                                        print(f"    处理音频素材，调整source_timerange")
                                         if 'source_timerange' not in segment:
                                             segment['source_timerange'] = {}
-                                        # 保持source_timerange的start不变，只调整duration
                                         segment['source_timerange']['duration'] = new_duration
-                                        print(f"    同步 source_timerange: duration={new_duration}")
-                                    
-                                    print(f"  [更新] {material_name}")
-                                    print(f"    旧位置: start={old_start}, duration={old_duration}, end={old_end}")
-                                    print(f"    新位置: start={old_start}, duration={new_duration}, end={new_end}")
-                                    print(f"    目标结束时间: {video_end_time}")
-                                    print(f"    时间同步: {abs(new_end - video_end_time) < 1000} (误差小于1ms)")
-                                    found = True
-                                    processed_segments += 1
-                                    # 不要break，继续处理其他可能的segment
-                            # 不要break，继续检查其他track
-                        
-                        if found:
-                            print(f"  [完成] 处理了 {processed_segments} 个片段")
-                        else:
-                            print(f"  [警告] 未找到素材片段: {material_name} (material_id: {material_id})")
-                    
-                    print("=" * 60)
-                    print("所有素材结束时间对齐完成")
-                    print("=" * 60)
+                                    break
             else:
                 if not video_material_id:
                     print(f"[错误] 未找到视频素材: local_material_id={video_material_local_id}")
-                else:
-                    print(f"[错误] 视频素材duration为0: local_material_id={video_material_local_id}")
-            
-            print("=" * 60)
-            print("TTS音频、字幕、贴纸和视频素材时序同步完成")
-            print("=" * 60)
-            
-            # 补充：处理时间长度显示
-            print("[补充] 处理时间长度显示:")
-            
-            # 1. 找到id为7453700C-DD8B-44d8-91DA-05690591DCA9的文本片段
-            target_text_id = "7453700C-DD8B-44d8-91DA-05690591DCA9"
-            display_text_id = "4F5AEA3A-6BDF-4933-8DE1-EC31E979E97F"
-            
-            # 查找所有文本轨道中的片段
-            total_duration = 0
-            for track in text_tracks:
+                elif video_duration == 0:
+                    print(f"[错误] 视频素材duration为0")
+
+            # 计算最终视频总时长
+            last_position_track_duration = 0
+            for track in data.get('tracks', []):
                 for segment in track.get('segments', []):
-                    material_id = segment.get('material_id')
-                    if material_id == target_text_id:
-                        # 获取时间长度（微秒）
-                        timerange = segment.get('target_timerange', {})
-                        duration_us = timerange.get('duration', 0)
-                        # 转换为秒并取整数
-                        total_duration = int(duration_us / 1000000)
-                        print(f"  找到目标文本片段，时长: {duration_us}微秒 = {total_duration}秒")
-                        break
-                if total_duration > 0:
-                    break
-            
-            # 2. 找到id为4F5AEA3A-6BDF-4933-8DE1-EC31E979E97F的文本片段并替换内容
-            if total_duration > 0:
-                # 查找materials中的texts
-                if 'materials' in data and 'texts' in data['materials']:
-                    for text_item in data['materials']['texts']:
-                        text_id = text_item.get('id')
-                        if text_id == display_text_id:
-                            # 替换content中的text
-                            content_str = text_item.get('content', '')
-                            if content_str:
-                                try:
-                                    content_obj = json.loads(content_str)
-                                    old_text = content_obj.get('text', '')
-                                    new_text = f"{total_duration}秒"
-                                    print(f"  替换前显示文本: {old_text}")
-                                    content_obj['text'] = new_text
-                                    text_item['content'] = json.dumps(content_obj, ensure_ascii=False)
-                                    print(f"  替换后显示文本: {new_text}")
-                                except json.JSONDecodeError:
-                                    # 如果解析失败，直接替换整个content
-                                    old_text = content_str
-                                    new_text = f"{total_duration}秒"
-                                    print(f"  替换前显示content: {old_text[:50]}...")
-                                    text_item['content'] = new_text
-                                    print(f"  替换后显示content: {new_text}")
-                            else:
-                                new_text = f"{total_duration}秒"
-                                text_item['content'] = new_text
-                                print(f"  显示content为空，设置为: {new_text}")
+                    if segment.get('material_id') in last_position_ids:
+                        seg_duration = segment.get('target_timerange', {}).get('duration', 0)
+                        seg_start = segment.get('target_timerange', {}).get('start', 0)
+                        seg_end = seg_start + seg_duration
+                        if seg_end > last_position_track_duration:
+                            last_position_track_duration = seg_duration
+
+            if last_position_ids and last_position_track_duration > 0:
+                final_total_duration = last_subtitle_end + gap_04s + last_position_track_duration
+            else:
+                final_total_duration = last_subtitle_end + gap_04s + 2000000
+
+            data['duration'] = final_total_duration
+
+            # 更新指定ID的素材duration为视频总时长
+            global_track_ids = [
+                "4F5AEA3A-6BDF-4933-8DE1-EC31E979E97F",
+                "7453700C-DD8B-44d8-91DA-05690591DCA9",
+                "138B976C-7CB2-4515-AB35-20F3C17CC051"
+            ]
+
+            audios_list = materials.get('audios', [])
+            for audio_item in audios_list:
+                if audio_item.get('type') == 'music':
+                    music_id = audio_item.get('id')
+                    if music_id:
+                        global_track_ids.append(music_id)
+
+            matched_materials = []
+
+            for item_id in global_track_ids:
+                for material_type in ['videos', 'audios', 'texts', 'stickers', 'images', 'effects']:
+                    type_list = materials.get(material_type, [])
+                    for item in type_list:
+                        if item.get('id') == item_id:
+                            item['duration'] = final_total_duration
+                            matched_materials.append(item_id)
                             break
-            
-            # 3. 更新草稿文件最上层的duration值（微秒）
-            if duration_us > 0:
-                # 将秒转换为微秒
-                total_duration_us = duration_us
-                data['duration'] = total_duration_us
-                print(f"  更新最上层duration为: {total_duration_us}微秒 = {total_duration}秒")
-            
+                    if item_id in matched_materials:
+                        break
+
+            if not matched_materials:
+                print(f"未找到指定ID的素材")
+            else:
+                for track in data.get('tracks', []):
+                    segments = track.get('segments', [])
+                    for segment in segments:
+                        material_id = segment.get('material_id')
+                        if material_id in matched_materials:
+                            segment['target_timerange']['duration'] = final_total_duration
+
+            # 处理时间长度显示
+            display_text_id = "4F5AEA3A-6BDF-4933-8DE1-EC31E979E97F"
+            total_seconds = int(final_total_duration / 1000000)
+
+            if 'materials' in data and 'texts' in data['materials']:
+                for text_item in data['materials']['texts']:
+                    text_id = text_item.get('id')
+                    if text_id == display_text_id:
+                        content_str = text_item.get('content', '')
+                        if content_str:
+                            try:
+                                content_obj = json.loads(content_str)
+                                new_text = f"{total_seconds}秒"
+                                content_obj['text'] = new_text
+                                text_item['content'] = json.dumps(content_obj, ensure_ascii=False)
+                            except json.JSONDecodeError:
+                                text_item['content'] = f"{total_seconds}秒"
+                        else:
+                            text_item['content'] = f"{total_seconds}秒"
+                        break
+
+            print(f"处理完成，总时长: {total_seconds}秒")
             return data
             
         except Exception as e:

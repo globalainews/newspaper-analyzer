@@ -161,28 +161,40 @@ class DataManager:
             if not self.video_data:
                 self.show_warning("警告", "没有视频数据可保存")
                 return False
-            
+
+            print(f"[DEBUG save_video_data] video_data count = {len(self.video_data)}")
+            print(f"[DEBUG save_video_data] video_data[0] content = {self.video_data[0].get('content', '')[:50] if self.video_data else 'empty'}...")
+            print(f"[DEBUG save_video_data] current_image_file = {self.current_image_file}")
+            print(f"[DEBUG save_video_data] analysis_dir = {self.analysis_dir}")
+
             # 查找原始JSON文件
             if self.current_image_file:
                 base_name = os.path.splitext(os.path.basename(self.current_image_file))[0]
                 json_file = os.path.join(self.analysis_dir, f"{base_name}.json")
-                
+                print(f"[DEBUG save_video_data] 尝试保存到: {json_file}")
+                print(f"[DEBUG save_video_data] 文件是否存在: {os.path.exists(json_file)}")
+
                 # 读取原始JSON文件
                 if os.path.exists(json_file):
                     with open(json_file, 'r', encoding='utf-8') as f:
                         original_data = json.load(f)
-                    
+
                     # 更新news_blocks
                     original_data['news_blocks'] = self.video_data
-                    
+
                     # 保存回原始JSON文件
                     with open(json_file, 'w', encoding='utf-8') as f:
                         json.dump(original_data, f, ensure_ascii=False, indent=2)
-                    
+
                     self.update_progress("数据保存成功", 100, "#27AE60")
                     self.show_info("成功", f"视频数据保存成功!\n\n已保存到: {json_file}")
+                    print(f"[DEBUG save_video_data] 保存成功，返回 True")
                     return True
-            
+                else:
+                    print(f"[DEBUG save_video_data] JSON文件不存在，跳过")
+            else:
+                print(f"[DEBUG save_video_data] current_image_file为空或None，跳过")
+
             # 如果没有找到原始文件，保存为video_data.json
             video_data_file = os.path.join(self.analysis_dir, "video_data.json")
             with open(video_data_file, 'w', encoding='utf-8') as f:

@@ -462,12 +462,19 @@ class EnhancedKioskoDownloader:
         jianying_btn.pack(side=tk.RIGHT, padx=5)
         
         # 同步TTS和字幕时序按钮
-        sync_btn = tk.Button(btn_frame, text="⏱️ 同步时序", 
+        sync_btn = tk.Button(btn_frame, text="⏱️ 同步时序",
                            font=("Microsoft YaHei", 10), bg='#9B59B6', fg='white',
                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
                            command=lambda: self.video_generator.process_jianying_draft_timing() if self.video_generator else None)
         sync_btn.pack(side=tk.RIGHT, padx=5)
-        
+
+        # 截图按钮
+        screenshot_btn = tk.Button(btn_frame, text="📷 截图",
+                            font=("Microsoft YaHei", 10), bg='#16A085', fg='white',
+                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
+                            command=lambda: self.video_generator.capture_news_screenshots() if self.video_generator else None)
+        screenshot_btn.pack(side=tk.RIGHT, padx=5)
+
         video_btn = tk.Button(btn_frame, text="🎬 生成视频",
                             font=("Microsoft YaHei", 10), bg='#E74C3C', fg='white',
                             relief=tk.FLAT, padx=10, pady=5, cursor='hand2',

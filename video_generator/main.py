@@ -1,6 +1,8 @@
 # Main VideoGenerator class
 # 主视频生成器类
 
+import os
+import datetime
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 from .base import VideoGeneratorBase
@@ -29,7 +31,8 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
         index = selection[0]
         if index >= len(self.video_data):
             return
-        
+
+        self.current_news_index = index
         news = self.video_data[index]
         
         # 创建编辑窗口
@@ -52,15 +55,34 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
         content_text.insert(tk.END, news['content'])
         
         def save_edit():
-            news['title'] = title_entry.get()
-            news['content'] = content_text.get(1.0, tk.END).strip()
-            self.update_news_list()
-            edit_window.destroy()
-        
+            # 先让编辑窗口获得焦点，确保Text widget内容已提交
+            edit_window.focus_set()
+            edit_window.update()
+
+            # 延迟100ms后执行保存，确保UI更新完成
+            def do_save():
+                print(f"[DEBUG save_edit] 开始保存，news['content'] = {news['content'][:50]}...")
+                print(f"[DEBUG save_edit] Text widget content = {content_text.get(1.0, tk.END)[:50]}...")
+                news['title'] = title_entry.get()
+                news['content'] = content_text.get(1.0, tk.END).strip()
+                print(f"[DEBUG save_edit] 修改后，news['content'] = {news['content'][:50]}...")
+                self.update_news_list()
+                print(f"[DEBUG save_edit] 调用 save_video_data()")
+                self.save_video_data()
+                edit_window.destroy()
+
+            edit_window.after(100, do_save)
+
         # 保存按钮
-        save_btn = tk.Button(edit_window, text="保存", font=("Microsoft YaHei", 10), 
+        save_btn = tk.Button(edit_window, text="保存", font=("Microsoft YaHei", 10),
                            bg='#27AE60', fg='white', command=save_edit)
         save_btn.pack(pady=10)
+
+        # Text widget 焦点事件 - 按Tab离开时确保内容提交
+        def on_text_focus_out(event):
+            content_text.update()
+
+        content_text.bind('<FocusOut>', on_text_focus_out)
     
     def edit_news(self):
         """编辑选中的新闻"""
@@ -145,7 +167,76 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
             self.update_news_list()
             self.current_news_index = -1
             self.show_info("成功", f"已删除 {selected_count} 条新闻!")
-    
+
+    def capture_news_screenshots(self):
+        """根据新闻矩形框截图并保存"""
+        try:
+            if not self.video_data:
+                self.show_warning("警告", "没有新闻数据")
+                return
+
+            if not self.current_image_file or not os.path.exists(self.current_image_file):
+                self.show_warning("警告", "请先选择报纸图片")
+                return
+
+            # 加载原始图片
+            from PIL import Image
+            pil_image = Image.open(self.current_image_file)
+            orig_width, orig_height = pil_image.size
+
+            # 获取草稿目录路径
+            image_filename = os.path.basename(self.current_image_file)
+            base_name = os.path.splitext(image_filename)[0]
+            today = datetime.datetime.now()
+            date_str = today.strftime("%Y%m%d")
+            draft_name = f"{base_name}_{date_str}"
+            resources_dir = os.path.join(self.jianying_drafts_dir, draft_name, 'Resources')
+
+            # 创建Resources目录
+            os.makedirs(resources_dir, exist_ok=True)
+
+            # 遍历所有新闻，截取对应的区域
+            screenshot_count = 0
+            for i, news in enumerate(self.video_data):
+                position = news.get('position', [0, 0, 0, 0])
+                if len(position) != 4:
+                    print(f"新闻 {i+1}: 无有效位置信息，跳过")
+                    continue
+
+                x1, y1, x2, y2 = position
+
+                # 确保坐标有效
+                x1 = max(0, int(x1))
+                y1 = max(0, int(y1))
+                x2 = min(orig_width, int(x2))
+                y2 = min(orig_height, int(y2))
+
+                if x2 <= x1 or y2 <= y1:
+                    print(f"新闻 {i+1}: 无效坐标 ({x1},{y1},{x2},{y2})，跳过")
+                    continue
+
+                # 裁剪图片
+                cropped = pil_image.crop((x1, y1, x2, y2))
+
+                # 保存图片，命名格式：P1.jpg, P2.jpg, ...
+                screenshot_filename = f"P{i+1}.jpg"
+                screenshot_path = os.path.join(resources_dir, screenshot_filename)
+
+                # 保存为JPEG格式
+                cropped.save(screenshot_path, 'JPEG', quality=95)
+                screenshot_count += 1
+                print(f"保存截图: {screenshot_path}")
+
+            if screenshot_count > 0:
+                self.update_progress(f"截图保存成功 ({screenshot_count} 张)", 100, "#27AE60")
+                self.show_info("成功", f"截图保存成功！\n\n共保存 {screenshot_count} 张图片\n\n目录: {resources_dir}")
+            else:
+                self.show_warning("警告", "没有找到有效的新闻区域")
+
+        except Exception as e:
+            self.update_progress(f"截图失败: {str(e)}", 0, "#E74C3C")
+            self.show_error("错误", f"截图失败:\n{str(e)}")
+
     def export_news_images(self):
         """导出新闻图片"""
         try:

@@ -420,6 +420,11 @@ class UIHelpers:
             })
             self.news_selections.append(False)
         
+        # 恢复选中状态
+        if self.current_news_index >= 0 and self.current_news_index < len(self.news_selections):
+            self.news_selections[self.current_news_index] = True
+            self.update_selection_display()
+        
         # 更新滚动区域
         self.news_frame.update_idletasks()
         # 找到canvas并更新scrollregion

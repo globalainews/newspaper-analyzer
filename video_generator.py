@@ -630,7 +630,78 @@ class VideoGenerator:
             for i, news in enumerate(self.video_data):
                 content_preview = news['content'][:30] + '...' if len(news['content']) > 30 else news['content']
                 self.news_listbox.insert(tk.END, f"{i+1}. {news['title']} - {content_preview}")
-    
+            if self.current_news_index >= 0 and self.current_news_index < len(self.video_data):
+                self.news_listbox.select_set(self.current_news_index)
+
+    def capture_news_screenshots(self):
+        """根据新闻矩形框截图并保存"""
+        try:
+            if not self.video_data:
+                messagebox.showwarning("警告", "没有新闻数据")
+                return
+
+            if not self.current_image_file or not os.path.exists(self.current_image_file):
+                messagebox.showwarning("警告", "请先选择报纸图片")
+                return
+
+            # 加载原始图片
+            from PIL import Image
+            pil_image = Image.open(self.current_image_file)
+            orig_width, orig_height = pil_image.size
+
+            # 获取草稿目录路径
+            image_filename = os.path.basename(self.current_image_file)
+            base_name = os.path.splitext(image_filename)[0]
+            today = datetime.datetime.now()
+            date_str = today.strftime("%Y%m%d")
+            draft_name = f"{base_name}_{date_str}"
+            resources_dir = os.path.join(self.jianying_drafts_dir, draft_name, 'Resources')
+
+            # 创建Resources目录
+            os.makedirs(resources_dir, exist_ok=True)
+
+            # 遍历所有新闻，截取对应的区域
+            screenshot_count = 0
+            for i, news in enumerate(self.video_data):
+                position = news.get('position', [0, 0, 0, 0])
+                if len(position) != 4:
+                    print(f"新闻 {i+1}: 无有效位置信息，跳过")
+                    continue
+
+                x1, y1, x2, y2 = position
+
+                # 确保坐标有效
+                x1 = max(0, int(x1))
+                y1 = max(0, int(y1))
+                x2 = min(orig_width, int(x2))
+                y2 = min(orig_height, int(y2))
+
+                if x2 <= x1 or y2 <= y1:
+                    print(f"新闻 {i+1}: 无效坐标 ({x1},{y1},{x2},{y2})，跳过")
+                    continue
+
+                # 裁剪图片
+                cropped = pil_image.crop((x1, y1, x2, y2))
+
+                # 保存图片，命名格式：P1.jpg, P2.jpg, ...
+                screenshot_filename = f"P{i+1}.jpg"
+                screenshot_path = os.path.join(resources_dir, screenshot_filename)
+
+                # 保存为JPEG格式
+                cropped.save(screenshot_path, 'JPEG', quality=95)
+                screenshot_count += 1
+                print(f"保存截图: {screenshot_path}")
+
+            if screenshot_count > 0:
+                self.progress_label.config(text=f"截图保存成功 ({screenshot_count} 张)", fg="#27AE60")
+                messagebox.showinfo("成功", f"截图保存成功！\n\n共保存 {screenshot_count} 张图片\n\n目录: {resources_dir}")
+            else:
+                messagebox.showwarning("警告", "没有找到有效的新闻区域")
+
+        except Exception as e:
+            self.progress_label.config(text=f"截图失败: {str(e)}", fg="#E74C3C")
+            messagebox.showerror("错误", f"截图失败:\n{str(e)}")
+
     def edit_news_inline(self, event):
         """行内编辑新闻（双击编辑）"""
         if not self.news_listbox:
@@ -643,7 +714,8 @@ class VideoGenerator:
         index = selection[0]
         if index >= len(self.video_data):
             return
-        
+
+        self.current_news_index = index
         news = self.video_data[index]
         
         # 创建编辑窗口

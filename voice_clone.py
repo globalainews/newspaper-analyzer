@@ -140,9 +140,20 @@ class VoiceCloner:
             torch.cuda.manual_seed_all(self.seed)  # 如果使用GPU
             
             print(f"模型加载成功! 采样率: {self.sample_rate}, 语速: {self.speed}, 随机种子: {self.seed}")
-            
+
             # 尝试加载音色文件
             self.load_voice_file()
+
+            # 预热模型（运行一次推理以稳定模型状态）
+            print("正在预热模型...")
+            try:
+                warmup_text = "今天天气不错"
+                import tempfile
+                warmup_output = os.path.join(tempfile.gettempdir(), "_cosyvoice_warmup.wav")
+                self.generate_voice(warmup_text, warmup_output, silent=True, text_frontend=False)
+                print("模型预热完成")
+            except Exception as e:
+                print(f"模型预热时出现警告: {e}")
             
             # 移除模型加载完成对话窗
             # try:
@@ -260,7 +271,18 @@ class VoiceCloner:
             if not silent:
                 print(f"正在生成语音: '{text[:50]}...'")
                 print(f"  语速参数: {voice_speed}")
-            
+                print(f"  随机种子: {self.seed}")
+
+            # 每次生成前重置随机种子，确保风格一致性
+            import torch
+            import numpy as np
+            torch.manual_seed(self.seed)
+            torch.cuda.manual_seed_all(self.seed)
+            try:
+                np.random.seed(self.seed)
+            except Exception:
+                pass
+
             # 直接处理整个文本，不进行分割
             from cosyvoice.cli.frontend import CosyVoiceFrontEnd
             
