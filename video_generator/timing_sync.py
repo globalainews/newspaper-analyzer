@@ -635,6 +635,8 @@ class TimingSynchronizer:
                         material_id = segment.get('material_id')
                         if material_id in matched_materials:
                             segment['target_timerange']['duration'] = final_total_duration
+                            if 'source_timerange' in segment:
+                                segment['source_timerange']['duration'] = final_total_duration
 
             # 处理时间长度显示
             display_text_id = "4F5AEA3A-6BDF-4933-8DE1-EC31E979E97F"
