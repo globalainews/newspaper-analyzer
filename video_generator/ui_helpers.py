@@ -615,7 +615,9 @@ class UIHelpers:
                 
                 # 直接调用generate_voice方法，避免批量处理的索引问题
                 # 使用与剪映草稿功能相同的参数：text_frontend=False
-                success = cloner.generate_voice(news['content'], output_file, speed=cloner.speed, silent=True, text_frontend=False)
+                cosyvoice_config = self.config.get('cosyvoice', {})
+                instruct = cosyvoice_config.get('instruct')
+                success = cloner.generate_voice(news['content'], output_file, speed=cloner.speed, silent=True, text_frontend=False, instruct=instruct)
                 
                 if success:
                     self.update_progress("语音生成成功", 100, "#27AE60")
