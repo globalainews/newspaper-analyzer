@@ -234,7 +234,7 @@ class VoiceCloner:
             self.voice_loaded = False
             return False
 
-    def generate_voice(self, text, output_file, reference_audio=None, speed=None, silent=False, text_frontend=False, zero_shot_spk_id=''):
+    def generate_voice(self, text, output_file, reference_audio=None, speed=None, silent=False, text_frontend=False, zero_shot_spk_id='', instruct=None):
         """
         生成单个语音文件
         
@@ -246,6 +246,7 @@ class VoiceCloner:
             silent: 是否静默模式（不打印日志）
             text_frontend: 是否使用文本前端处理（默认False，避免前端分开）
             zero_shot_spk_id: 零样本说话人ID（可选）
+            instruct: 微调指令文本（可选，默认使用配置中的）
         
         Returns:
             bool: 是否成功
@@ -301,25 +302,28 @@ class VoiceCloner:
                     print(f"警告: 文本长度较长 ({len(normalized_text)} 字符)，可能会影响生成质量")
             
             # 生成语音
+            # 确定使用的instruct文本
+            use_instruct = instruct if instruct is not None else self.instruct
+
             all_speech = []
-            
+
             # 准备模型输入
             if self.voice_loaded:
                 # 使用加载的音色文件
                 model_input = self.cosyvoice.frontend.frontend_instruct2(
-                    normalized_text, 
-                    self.instruct, 
+                    normalized_text,
+                    use_instruct,
                     ref_audio,  # 虽然使用音色文件，但仍需要参考音频路径（可能是模型要求）
-                    self.cosyvoice.sample_rate, 
+                    self.cosyvoice.sample_rate,
                     zero_shot_spk_id='my_voice'  # 使用加载的音色
                 )
             else:
                 # 使用参考音频进行零样本克隆
                 model_input = self.cosyvoice.frontend.frontend_instruct2(
-                    normalized_text, 
-                    self.instruct, 
-                    ref_audio, 
-                    self.cosyvoice.sample_rate, 
+                    normalized_text,
+                    use_instruct,
+                    ref_audio,
+                    self.cosyvoice.sample_rate,
                     zero_shot_spk_id=zero_shot_spk_id
                 )
             

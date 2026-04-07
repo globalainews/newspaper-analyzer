@@ -164,7 +164,11 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                 output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output')
                 os.makedirs(output_dir, exist_ok=True)
 
-                test_text = "特朗普向德黑兰发出最后通牒，威胁若周二前不重新开放霍尔木兹海峡，将摧毁伊朗所有发电厂。此举极大地加剧了地区紧张局势。"
+                test_text = '随着特朗普对霍尔木兹海峡发出的最后通牒期限临近，伊朗发出严厉警告，威胁将采取毁灭性报复行动，双方目前均拒绝了停战提议。'
+                cosyvoice_config = self.config.get('cosyvoice', {})
+                test_instruct = cosyvoice_config.get('test_instruct', 'You are a helpful assistant.<|endofprompt|>')
+                original_instruct = cloner.instruct
+                cloner.instruct = test_instruct
 
                 seeds = [random.randint(0, 65535) for _ in range(100)]
 
@@ -178,7 +182,7 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                     output_path = os.path.join(output_dir, filename)
 
                     progress = 30 + int((i + 1) / 10 * 60)
-                    self.update_progress(f"生成中... {i+1}/100 (seed={seed}, speed={cloner.speed})", progress)
+                    self.update_progress(f"生成中... {i+1}/100 (seed={seed}, speed={cloner.speed}, instruct={test_instruct[:30]}...)", progress)
 
                     success = cloner.generate_voice(
                         test_text,
@@ -191,6 +195,8 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                         print(f"生成成功: {filename} (seed={seed}, speed={cloner.speed})")
                     else:
                         print(f"生成失败: {filename}")
+
+                cloner.instruct = original_instruct
 
                 self.update_progress("测试完成!", 100)
                 self.show_info("完成", f"已在 output 文件夹生成10个测试音频:\n" + "\n".join([f"test{seed:05d}.wav" for seed in seeds]))
