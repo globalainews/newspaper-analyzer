@@ -429,7 +429,7 @@ class VoiceCloner:
             output_file = os.path.join(output_dir, audio_filename)
             
             # 更新进度
-            self._report_progress(i + 2, total_news + 1, f'正在生成 {audio_filename}...')
+            self._report_progress(i + 2, total_news + 1, f'正在生成 {audio_filename} (speed={voice_speed}, seed={self.seed})...')
             
             # 生成语音（静默模式，避免干扰进度条）
             success = self.generate_voice(content, output_file, reference_audio, speed, silent=True, text_frontend=text_frontend)
