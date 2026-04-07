@@ -617,6 +617,13 @@ class UIHelpers:
                 # 使用与剪映草稿功能相同的参数：text_frontend=False
                 cosyvoice_config = self.config.get('cosyvoice', {})
                 instruct = cosyvoice_config.get('test_instruct')
+                seed = cosyvoice_config.get('seed', 888)
+                
+                import torch
+                torch.manual_seed(seed)
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed_all(seed)
+                
                 success = cloner.generate_voice(news['content'], output_file, speed=cloner.speed, silent=False, text_frontend=False, instruct=instruct)
                 
                 if success:

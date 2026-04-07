@@ -567,9 +567,12 @@ def clone_voices_for_draft(draft_dir, news_list, config=None, reference_audio=No
 
     # 获取全局语音克隆器实例
     cloner = get_cosyvoice_cloner(config, progress_callback)
-    # 更新参考音频（如果指定了）
+    # 更新参考音频（如果指定了，需要转换为绝对路径）
     if reference_audio:
-        cloner.reference_audio = reference_audio
+        if os.path.isabs(reference_audio):
+            cloner.reference_audio = reference_audio
+        else:
+            cloner.reference_audio = os.path.join(COSYVOICE_ROOT_DIR, reference_audio)
 
     # 如果没有指定参考音频，使用默认路径
     if not cloner.reference_audio:
