@@ -434,7 +434,7 @@ class EnhancedKioskoDownloader:
         
         btn_frame = tk.Frame(left_frame, bg='#ECF0F1')
         btn_frame.pack(fill=tk.X, padx=10, pady=(0, 5))
-        
+
         generate_btn = tk.Button(btn_frame, text="📊 生成数据", 
                                font=("Microsoft YaHei", 10), bg='#3498DB', fg='white',
                                relief=tk.FLAT, padx=10, pady=5, cursor='hand2',

@@ -170,7 +170,7 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                 original_instruct = cloner.instruct
                 cloner.instruct = test_instruct
 
-                seeds = [random.randint(0, 65535) for _ in range(10)]
+                seeds = [random.randint(0, 65535) for _ in range(2)]
 
                 for i, seed in enumerate(seeds):
                     import torch

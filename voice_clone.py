@@ -258,17 +258,17 @@ class VoiceCloner:
         try:
             import torch
             import torchaudio
-            
+
             # 使用传入的参数或默认值
             ref_audio = reference_audio or self.reference_audio
             voice_speed = speed or self.speed
-            
+
             # 检查参考音频文件
             if not os.path.exists(ref_audio):
                 if not silent:
                     print(f"错误: 参考音频文件不存在: {ref_audio}")
                 return False
-            
+
             if not silent:
                 print(f"正在生成语音: '{text[:50]}...'")
                 print(f"  语速参数: {voice_speed}")
@@ -289,13 +289,15 @@ class VoiceCloner:
             
             # 前端处理
             tts_text = text
+            import re
+            tts_text = re.sub(r'[""'']', '', tts_text)
             if text_frontend:
                 # 直接调用frontend的text_normalize但不分割
                 normalized_text = self.cosyvoice.frontend.text_normalize(tts_text, split=False, text_frontend=text_frontend)
             else:
                 # 即使不使用前端处理，也确保文本是字符串格式
                 normalized_text = str(tts_text)
-            
+
             # 检查文本长度
             if len(normalized_text) > 1000:
                 if not silent:
@@ -567,6 +569,7 @@ def clone_voices_for_draft(draft_dir, news_list, config=None, reference_audio=No
 
     # 获取全局语音克隆器实例
     cloner = get_cosyvoice_cloner(config, progress_callback)
+
     # 更新参考音频（如果指定了，需要转换为绝对路径）
     if reference_audio:
         if os.path.isabs(reference_audio):
