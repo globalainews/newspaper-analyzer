@@ -373,7 +373,7 @@ class VoiceCloner:
                 traceback.print_exc()
             return False
     
-    def generate_voices_for_news(self, news_list, output_dir, reference_audio=None, speed=None, text_frontend=False):
+    def generate_voices_for_news(self, news_list, output_dir, reference_audio=None, speed=None, text_frontend=False, instruct=None):
         """
         为新闻列表批量生成语音
         
@@ -383,6 +383,7 @@ class VoiceCloner:
             reference_audio: 参考音频文件路径（可选）
             speed: 语速（可选）
             text_frontend: 是否使用文本前端处理（默认False，避免前端分开）
+            instruct: 微调指令文本（可选）
         
         Returns:
             list: 生成的音频文件列表
@@ -411,7 +412,7 @@ class VoiceCloner:
         test_content = "今天的天气不错啊"
         
         # 生成测试音频（暂时关闭静默模式以查看错误信息）
-        test_success = self.generate_voice(test_content, test_output_file, reference_audio, speed, silent=False, text_frontend=text_frontend)
+        test_success = self.generate_voice(test_content, test_output_file, reference_audio, speed, silent=False, text_frontend=text_frontend, instruct=instruct)
         
         if test_success:
             print("[测试] 测试音频生成成功: test_audio.wav")
@@ -436,7 +437,7 @@ class VoiceCloner:
             self._report_progress(i + 2, total_news + 1, f'正在生成 {audio_filename} (speed={self.speed}, seed={self.seed})...')
             
             # 生成语音（静默模式，避免干扰进度条）
-            success = self.generate_voice(content, output_file, reference_audio, speed, silent=True, text_frontend=text_frontend)
+            success = self.generate_voice(content, output_file, reference_audio, speed, silent=True, text_frontend=text_frontend, instruct=instruct)
             
             if success:
                 generated_files.append({
@@ -537,7 +538,7 @@ def get_cosyvoice_cloner(config=None, progress_callback=None):
     return _cosyvoice_cloner
 
 
-def clone_voices_for_draft(draft_dir, news_list, config=None, reference_audio=None, progress_callback=None, text_frontend=False):
+def clone_voices_for_draft(draft_dir, news_list, config=None, reference_audio=None, progress_callback=None, text_frontend=False, instruct=None):
     """
     为剪映草稿生成语音文件
     
@@ -548,6 +549,7 @@ def clone_voices_for_draft(draft_dir, news_list, config=None, reference_audio=No
         reference_audio: 参考音频文件路径（可选）
         progress_callback: 进度回调函数（可选）
         text_frontend: 是否使用文本前端处理（默认False，避免前端分开）
+        instruct: 微调指令文本（可选）
     
     Returns:
         list: 生成的音频文件列表
@@ -579,7 +581,7 @@ def clone_voices_for_draft(draft_dir, news_list, config=None, reference_audio=No
             return []
 
     # 生成语音
-    return cloner.generate_voices_for_news(news_list, text_reading_dir, speed=cloner.speed, text_frontend=text_frontend)
+    return cloner.generate_voices_for_news(news_list, text_reading_dir, speed=cloner.speed, text_frontend=text_frontend, instruct=instruct)
 
 
 if __name__ == '__main__':

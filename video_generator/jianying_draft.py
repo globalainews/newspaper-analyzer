@@ -259,14 +259,18 @@ class JianyingDraftManager:
                                 cosyvoice_config = self.config.get('cosyvoice', {})
                                 if 'reference_audio' in cosyvoice_config:
                                     reference_audio = cosyvoice_config['reference_audio']
-                                
+
+                                # 获取instruct配置
+                                instruct = cosyvoice_config.get('instruct')
+
                                 # 调用语音克隆
                                 generated_files = clone_voices_for_draft(
                                     draft_dir,
                                     self.video_data,
                                     self.config,
                                     reference_audio,
-                                    progress_callback
+                                    progress_callback,
+                                    instruct=instruct
                                 )
                                 
                                 # 关闭进度窗口
