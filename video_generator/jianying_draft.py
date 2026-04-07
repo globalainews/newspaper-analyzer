@@ -260,8 +260,8 @@ class JianyingDraftManager:
                                 if 'reference_audio' in cosyvoice_config:
                                     reference_audio = cosyvoice_config['reference_audio']
 
-                                # 获取instruct配置
-                                instruct = cosyvoice_config.get('instruct')
+                                # 获取instruct配置（使用test_instruct）
+                                instruct = cosyvoice_config.get('test_instruct')
 
                                 # 调用语音克隆
                                 generated_files = clone_voices_for_draft(

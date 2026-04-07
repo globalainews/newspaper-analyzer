@@ -98,8 +98,8 @@ class VoiceCloner:
             self.voice_file = os.path.join(COSYVOICE_ROOT_DIR, 'myVoice.pt')
         
         self.speed = cosyvoice_config.get('speed', 1.3)
-        self.instruct = cosyvoice_config.get('instruct', 'You are a helpful assistant.<|endofprompt|>')
-        self.seed = cosyvoice_config.get('seed', 888)  # 读取随机种子参数
+        self.instruct = cosyvoice_config.get('test_instruct', 'You are a helpful assistant.<|endofprompt|>')
+        self.seed = cosyvoice_config.get('seed', 888)
         self.voice_loaded = False  # 音色文件加载状态
     
     def _report_progress(self, current, total, message=''):
