@@ -334,6 +334,11 @@ class TimingSynchronizer:
                     segment['target_timerange']['start'] = timing.get('new_start', 0)
                     segment['target_timerange']['duration'] = timing.get('new_duration', 0)
 
+                    # 同步更新source_timerange的duration
+                    if 'source_timerange' not in segment:
+                        segment['source_timerange'] = {}
+                    segment['source_timerange']['duration'] = timing.get('new_duration', 0)
+
                     update_count += 1
 
             # 更新文本轨道中的字幕片段
@@ -507,7 +512,8 @@ class TimingSynchronizer:
                                         segment['target_timerange']['start'] = new_start
                                         segment['target_timerange']['duration'] = new_duration
                                     else:
-                                        new_start = audio_start
+                                        # P2及以后的图片，开始位置减少0.4秒，避免空白
+                                        new_start = audio_start - gap_04s
                                         new_duration = new_end - new_start
                                         segment['target_timerange']['start'] = new_start
                                         segment['target_timerange']['duration'] = new_duration
@@ -603,19 +609,20 @@ class TimingSynchronizer:
             global_track_ids = [
                 "4F5AEA3A-6BDF-4933-8DE1-EC31E979E97F",
                 "7453700C-DD8B-44d8-91DA-05690591DCA9",
-                "138B976C-7CB2-4515-AB35-20F3C17CC051"
+                "6D615812-D534-4a33-8A98-282CF7D86ED7",
+                "C8069C58-C619-4b7f-9D11-62526E90AB21"
             ]
 
             audios_list = materials.get('audios', [])
             for audio_item in audios_list:
                 if audio_item.get('type') == 'music':
                     music_id = audio_item.get('id')
-                    if music_id:
+                    if music_id:                                                                                                            
                         global_track_ids.append(music_id)
 
             matched_materials = []
 
-            for item_id in global_track_ids:
+            for item_id in global_track_ids:                                                                    
                 for material_type in ['videos', 'audios', 'texts', 'stickers', 'images', 'effects']:
                     type_list = materials.get(material_type, [])
                     for item in type_list:

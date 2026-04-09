@@ -141,9 +141,6 @@ class VoiceCloner:
             
             print(f"模型加载成功! 采样率: {self.sample_rate}, 语速: {self.speed}, 随机种子: {self.seed}")
 
-            # 尝试加载音色文件
-            self.load_voice_file()
-
             # 预热模型（运行一次推理以稳定模型状态）
             print("正在预热模型...")
             try:
@@ -309,25 +306,15 @@ class VoiceCloner:
 
             all_speech = []
 
-            # 准备模型输入
-            if self.voice_loaded:
-                # 使用加载的音色文件
-                model_input = self.cosyvoice.frontend.frontend_instruct2(
-                    normalized_text,
-                    use_instruct,
-                    ref_audio,  # 虽然使用音色文件，但仍需要参考音频路径（可能是模型要求）
-                    self.cosyvoice.sample_rate,
-                    zero_shot_spk_id='my_voice'  # 使用加载的音色
-                )
-            else:
-                # 使用参考音频进行零样本克隆
-                model_input = self.cosyvoice.frontend.frontend_instruct2(
-                    normalized_text,
-                    use_instruct,
-                    ref_audio,
-                    self.cosyvoice.sample_rate,
-                    zero_shot_spk_id=zero_shot_spk_id
-                )
+            # 准备模型输入 - 使用reference_audio进行零样本克隆
+            # zero_shot_spk_id='' 表示从prompt_wav(ref_audio)提取音色特征
+            model_input = self.cosyvoice.frontend.frontend_instruct2(
+                normalized_text,
+                use_instruct,
+                ref_audio,
+                self.cosyvoice.sample_rate,
+                zero_shot_spk_id=''  # 空字符串触发零样本克隆
+            )
             
             # 检查模型输入
             if not silent:

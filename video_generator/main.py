@@ -164,13 +164,13 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                 output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output')
                 os.makedirs(output_dir, exist_ok=True)
 
-                test_text = '随着特朗普对霍尔木兹海峡发出的最后通牒期限临近，伊朗发出严厉警告，威胁将采取毁灭性报复行动，双方目前均拒绝了停战提议。'
+                test_text = '停火协议首日即摇摇欲坠！作为对以色列空袭黎巴嫩的回应，伊朗威胁将继续封锁霍尔木兹海峡。'
                 cosyvoice_config = self.config.get('cosyvoice', {})
                 test_instruct = cosyvoice_config.get('test_instruct', 'You are a helpful assistant.<|endofprompt|>')
                 original_instruct = cloner.instruct
                 cloner.instruct = test_instruct
 
-                seeds = [random.randint(0, 65535) for _ in range(2)]
+                seeds = [random.randint(0, 65535) for _ in range(5)]
 
                 for i, seed in enumerate(seeds):
                     import torch

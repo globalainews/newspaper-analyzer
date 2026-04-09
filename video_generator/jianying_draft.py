@@ -136,13 +136,47 @@ class JianyingDraftManager:
                         materials = draft_content['materials']
                         if 'texts' in materials and isinstance(materials.get('texts'), list):
                             texts_found = True
-                            texts_list = materials['texts']
+                            raw_texts = materials['texts']
+                            # 过滤掉内容为空格的文本
+                            texts_list = []
+                            for text_item in raw_texts:
+                                content_str = text_item.get('content', '')
+                                if content_str:
+                                    try:
+                                        content_obj = json.loads(content_str)
+                                        text_content = content_obj.get('text', '')
+                                        # 检查文本是否只包含空格和换行
+                                        if text_content.strip():
+                                            texts_list.append(text_item)
+                                    except:
+                                        # 如果解析失败，保留原文本
+                                        texts_list.append(text_item)
+                                else:
+                                    # 如果content为空，保留原文本
+                                    texts_list.append(text_item)
                             print(f"在materials.texts中找到texts数组，长度: {len(texts_list)}")
                     
                     # 尝试在顶层查找texts
                     if not texts_found and 'texts' in draft_content and isinstance(draft_content['texts'], list):
                         texts_found = True
-                        texts_list = draft_content['texts']
+                        raw_texts = draft_content['texts']
+                        # 过滤掉内容为空格的文本
+                        texts_list = []
+                        for text_item in raw_texts:
+                            content_str = text_item.get('content', '')
+                            if content_str:
+                                try:
+                                    content_obj = json.loads(content_str)
+                                    text_content = content_obj.get('text', '')
+                                    # 检查文本是否只包含空格和换行
+                                    if text_content.strip():
+                                        texts_list.append(text_item)
+                                except:
+                                    # 如果解析失败，保留原文本
+                                    texts_list.append(text_item)
+                            else:
+                                # 如果content为空，保留原文本
+                                texts_list.append(text_item)
                         print(f"在顶层找到texts数组，长度: {len(texts_list)}")
                     
                     if texts_found:
