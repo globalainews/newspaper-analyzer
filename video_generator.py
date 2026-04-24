@@ -1759,3 +1759,68 @@ class VideoGenerator:
             import traceback
             traceback.print_exc()
             messagebox.showerror("错误", f"处理剪映草稿时序失败: {str(e)}")
+    
+    def adjust_to_perfect_rectangle(self):
+        """将所有新闻区域调整为3:5比例的完美矩形"""
+        try:
+            if not self.video_data:
+                messagebox.showwarning("警告", "没有新闻数据")
+                return
+            
+            if not self.current_image_file or not os.path.exists(self.current_image_file):
+                messagebox.showwarning("警告", "请先选择报纸图片")
+                return
+            
+            from PIL import Image
+            pil_image = Image.open(self.current_image_file)
+            img_width, img_height = pil_image.size
+            
+            adjusted_count = 0
+            for i, news in enumerate(self.video_data):
+                position = news.get('position', [0, 0, 0, 0])
+                if len(position) != 4:
+                    continue
+                
+                x1, y1, x2, y2 = position
+                current_width = x2 - x1
+                current_height = y2 - y1
+                
+                if current_width <= 0 or current_height <= 0:
+                    continue
+                
+                center_x = (x1 + x2) / 2
+                center_y = (y1 + y2) / 2
+                
+                target_ratio = 3 / 5
+                current_ratio = current_width / current_height
+                
+                if current_ratio > target_ratio:
+                    new_width = current_width
+                    new_height = new_width / target_ratio
+                else:
+                    new_height = current_height
+                    new_width = new_height * target_ratio
+                
+                new_x1 = center_x - new_width / 2
+                new_y1 = center_y - new_height / 2
+                new_x2 = center_x + new_width / 2
+                new_y2 = center_y + new_height / 2
+                
+                new_x1 = max(0, int(new_x1))
+                new_y1 = max(0, int(new_y1))
+                new_x2 = min(img_width, int(new_x2))
+                new_y2 = min(img_height, int(new_y2))
+                
+                news['position'] = [new_x1, new_y1, new_x2, new_y2]
+                adjusted_count += 1
+                print(f"新闻 {i+1}: 调整为3:5比例 [{new_x1}, {new_y1}, {new_x2}, {new_y2}]")
+            
+            self.highlight_news_block(self.current_news_index if self.current_news_index >= 0 else 0)
+            
+            messagebox.showinfo("成功", f"已将 {adjusted_count} 个新闻区域调整为3:5比例")
+            
+        except Exception as e:
+            print(f"调整完美矩形失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("错误", f"调整完美矩形失败: {str(e)}")

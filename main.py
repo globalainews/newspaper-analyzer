@@ -481,6 +481,13 @@ class EnhancedKioskoDownloader:
                             relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
                             command=lambda: self.video_generator.capture_news_screenshots() if self.video_generator else None)
         screenshot_btn.pack(side=tk.RIGHT, padx=5)
+        
+        # 完美矩形按钮
+        perfect_rect_btn = tk.Button(btn_frame, text="📐 完美矩形",
+                            font=("Microsoft YaHei", 10), bg='#1ABC9C', fg='white',
+                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
+                            command=lambda: self.video_generator.adjust_to_perfect_rectangle() if self.video_generator else None)
+        perfect_rect_btn.pack(side=tk.RIGHT, padx=5)
 
         video_btn = tk.Button(btn_frame, text="🎬 生成视频",
                             font=("Microsoft YaHei", 10), bg='#E74C3C', fg='white',

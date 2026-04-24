@@ -1,1 +1,1 @@
-./.venv/Scripts/python.exe main.py
+E:\AIcode\.venv\Scripts\python.exe main.py
