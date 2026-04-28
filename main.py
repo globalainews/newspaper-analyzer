@@ -444,8 +444,19 @@ class EnhancedKioskoDownloader:
         save_btn = tk.Button(btn_frame, text="💾 保存数据", 
                            font=("Microsoft YaHei", 10), bg='#27AE60', fg='white',
                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
-                           command=lambda: self.video_generator.save_video_data() if self.video_generator else None)
+                           command=lambda: save_data_before() or self.video_generator.save_video_data() if self.video_generator else None)
         save_btn.pack(side=tk.LEFT, padx=5)
+
+        # 在保存前更新所有文本框的数据
+        def save_data_before():
+            if hasattr(self.video_generator, 'news_textboxes'):
+                for i, textbox_info in enumerate(self.video_generator.news_textboxes):
+                    title = textbox_info['title'].get(1.0, tk.END).strip()
+                    content = textbox_info['content'].get(1.0, tk.END).strip()
+                    if i < len(self.video_generator.video_data):
+                        self.video_generator.video_data[i]['title'] = title
+                        self.video_generator.video_data[i]['content'] = content
+                        print(f"[DEBUG] 更新 video_data[{i}]: {title[:20]}...")
 
         # 加载CosyVoice模型按钮
         load_model_btn = tk.Button(btn_frame, text="🔊 加载模型",

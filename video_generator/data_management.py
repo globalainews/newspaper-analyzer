@@ -167,8 +167,11 @@ class DataManager:
             print(f"[DEBUG save_video_data] current_image_file = {self.current_image_file}")
             print(f"[DEBUG save_video_data] analysis_dir = {self.analysis_dir}")
 
-            # 查找原始JSON文件
-            if self.current_image_file:
+            saved = False
+            saved_path = None
+
+            # 尝试保存到原始JSON文件
+            if self.current_image_file and os.path.exists(self.current_image_file):
                 base_name = os.path.splitext(os.path.basename(self.current_image_file))[0]
                 json_file = os.path.join(self.analysis_dir, f"{base_name}.json")
                 print(f"[DEBUG save_video_data] 尝试保存到: {json_file}")
@@ -186,26 +189,66 @@ class DataManager:
                     with open(json_file, 'w', encoding='utf-8') as f:
                         json.dump(original_data, f, ensure_ascii=False, indent=2)
 
-                    self.update_progress("数据保存成功", 100, "#27AE60")
-                    self.show_info("成功", f"视频数据保存成功!\n\n已保存到: {json_file}")
-                    print(f"[DEBUG save_video_data] 保存成功，返回 True")
-                    return True
+                    saved = True
+                    saved_path = json_file
+                    print(f"[DEBUG save_video_data] 保存成功到原始文件: {json_file}")
                 else:
-                    print(f"[DEBUG save_video_data] JSON文件不存在，跳过")
+                    print(f"[DEBUG save_video_data] JSON文件不存在: {json_file}")
             else:
-                print(f"[DEBUG save_video_data] current_image_file为空或None，跳过")
+                print(f"[DEBUG save_video_data] current_image_file为空或None或文件不存在")
 
-            # 如果没有找到原始文件，保存为video_data.json
-            video_data_file = os.path.join(self.analysis_dir, "video_data.json")
-            with open(video_data_file, 'w', encoding='utf-8') as f:
-                json.dump(self.video_data, f, ensure_ascii=False, indent=2)
-            
-            self.update_progress("数据保存成功", 100, "#27AE60")
-            self.show_info("成功", f"视频数据保存成功!\n\n已保存到: {video_data_file}")
-            
-            return True
+            # 如果没有保存成功，尝试查找analysis_dir下最新的JSON文件
+            if not saved:
+                json_files = []
+                if os.path.exists(self.analysis_dir):
+                    for file in os.listdir(self.analysis_dir):
+                        if file.endswith('.json') and file != 'video_data.json':
+                            file_path = os.path.join(self.analysis_dir, file)
+                            json_files.append((file_path, os.path.getmtime(file_path)))
+                
+                if json_files:
+                    # 按修改时间排序，取最新的
+                    json_files.sort(key=lambda x: x[1], reverse=True)
+                    latest_json = json_files[0][0]
+                    
+                    print(f"[DEBUG save_video_data] 使用最新的JSON文件: {latest_json}")
+                    
+                    with open(latest_json, 'r', encoding='utf-8') as f:
+                        original_data = json.load(f)
+
+                    # 更新news_blocks
+                    original_data['news_blocks'] = self.video_data
+
+                    # 保存回原始JSON文件
+                    with open(latest_json, 'w', encoding='utf-8') as f:
+                        json.dump(original_data, f, ensure_ascii=False, indent=2)
+                    
+                    saved = True
+                    saved_path = latest_json
+                    print(f"[DEBUG save_video_data] 保存成功到最新文件: {latest_json}")
+
+            # 如果仍然没有保存成功，保存为video_data.json
+            if not saved:
+                video_data_file = os.path.join(self.analysis_dir, "video_data.json")
+                with open(video_data_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.video_data, f, ensure_ascii=False, indent=2)
+                saved = True
+                saved_path = video_data_file
+                print(f"[DEBUG save_video_data] 保存成功到video_data.json")
+
+            if saved and saved_path:
+                self.update_progress("数据保存成功", 100, "#27AE60")
+                self.show_info("成功", f"视频数据保存成功!\n\n已保存到: {saved_path}")
+                print(f"[DEBUG save_video_data] 保存成功，返回 True")
+                return True
+            else:
+                self.update_progress("保存失败", 0, "#E74C3C")
+                self.show_error("错误", "保存视频数据失败")
+                return False
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             self.update_progress(f"保存失败: {str(e)}", 0, "#E74C3C")
             self.show_error("错误", f"保存视频数据失败:\n{str(e)}")
             return False
