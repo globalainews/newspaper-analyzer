@@ -164,9 +164,9 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                 output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output')
                 os.makedirs(output_dir, exist_ok=True)
 
-                test_text = '停火协议首日即摇摇欲坠！作为对以色列空袭黎巴嫩的回应，伊朗威胁将继续封锁霍尔木兹海峡。'
                 cosyvoice_config = self.config.get('cosyvoice', {})
-                test_instruct = cosyvoice_config.get('test_instruct', 'You are a helpful assistant.<|endofprompt|>')
+                test_text = cosyvoice_config.get('test_text')
+                test_instruct = cosyvoice_config.get('test_instruct')
                 original_instruct = cloner.instruct
                 cloner.instruct = test_instruct
 
