@@ -521,6 +521,51 @@ class TimingSynchronizer:
                                     photo_item['duration'] = new_duration
                                     break
 
+            # 处理翻页sound素材（翻页1、翻页2等）与P1.jpg、P2.jpg对齐
+            audios_list = materials.get('audios', [])
+            翻页_materials = []
+            for audio in audios_list:
+                audio_name = audio.get('name', '')
+                audio_type = audio.get('type', '')
+                if audio_type == 'sound' and audio_name and audio_name.startswith('翻页'):
+                    翻页_materials.append({
+                        'id': audio.get('id'),
+                        'name': audio_name,
+                        'item': audio
+                    })
+
+            if not 翻页_materials:
+                print("[警告] 未找到翻页素材")
+            else:
+                print(f"[调试] 找到 {len(翻页_materials)} 个翻页素材")
+
+            if 翻页_materials and photos_to_align:
+                翻页_materials.sort(key=lambda x: x['name'])
+                photos_to_align_sorted = sorted(photos_to_align, key=lambda x: x['material_name'])
+
+                min_count = min(len(翻页_materials), len(photos_to_align_sorted))
+                for i in range(min_count):
+                    翻页_info = 翻页_materials[i]
+                    photo_info = photos_to_align_sorted[i]
+                    翻页_id = 翻页_info['id']
+                    photo_id = photo_info['id']
+
+                    for track in data.get('tracks', []):
+                        for segment in track.get('segments', []):
+                            if segment.get('material_id') == photo_id:
+                                photo_start = segment.get('target_timerange', {}).get('start', 0)
+                                photo_duration = segment.get('target_timerange', {}).get('duration', 0)
+                                photo_end = photo_start + photo_duration
+
+                                for track2 in data.get('tracks', []):
+                                    for segment2 in track2.get('segments', []):
+                                        if segment2.get('material_id') == 翻页_id:
+                                            segment2['target_timerange']['start'] = photo_start
+                                            print(f"[翻页对齐] {翻页_info['name']} → start={photo_start} (duration保持不变)")
+                                            break
+                                break
+                        break
+
             # 处理视频素材
             video_material_local_id = "adfc1f13-688a-4cce-8472-3b31aa079b30"
             target_video_id = "E42351AB-2F8B-4159-9C19-7CD524DD53C8"
