@@ -367,8 +367,74 @@ class EnhancedKioskoDownloader:
         self.result_text.bind('<ButtonRelease-1>', self.on_text_mouse_up)
     
     def create_video_tab(self):
-        main_paned = tk.PanedWindow(self.video_frame, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=4)
-        main_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        video_container = tk.Frame(self.video_frame)
+        video_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        btn_frame = tk.Frame(video_container, bg='#ECF0F1', width=120)
+        btn_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
+        btn_frame.pack_propagate(False)
+        
+        generate_btn = tk.Button(btn_frame, text="📊\n生成数据", 
+                               font=("Microsoft YaHei", 9), bg='#3498DB', fg='white',
+                               relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                               wraplength=80,
+                               command=lambda: self.video_generator.generate_video_data() if self.video_generator else None)
+        generate_btn.pack(fill=tk.X, padx=5, pady=2)
+        
+        save_btn = tk.Button(btn_frame, text="💾\n保存数据", 
+                           font=("Microsoft YaHei", 9), bg='#27AE60', fg='white',
+                           relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                           wraplength=80,
+                           command=lambda: save_data_before() or self.video_generator.save_video_data() if self.video_generator else None)
+        save_btn.pack(fill=tk.X, padx=5, pady=2)
+
+        def save_data_before():
+            if hasattr(self.video_generator, 'news_textboxes'):
+                for i, textbox_info in enumerate(self.video_generator.news_textboxes):
+                    title = textbox_info['title'].get(1.0, tk.END).strip()
+                    content = textbox_info['content'].get(1.0, tk.END).strip()
+                    if i < len(self.video_generator.video_data):
+                        self.video_generator.video_data[i]['title'] = title
+                        self.video_generator.video_data[i]['content'] = content
+                        print(f"[DEBUG] 更新 video_data[{i}]: {title[:20]}...")
+
+        load_model_btn = tk.Button(btn_frame, text="🔊\n加载模型",
+                            font=("Microsoft YaHei", 9), bg='#16A085', fg='white',
+                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                            wraplength=80,
+                            command=lambda: self.video_generator.load_cosyvoice_model() if self.video_generator else None)
+        load_model_btn.pack(fill=tk.X, padx=5, pady=2)
+
+        test_voice_btn = tk.Button(btn_frame, text="🎵\n测试音色",
+                            font=("Microsoft YaHei", 9), bg='#E67E22', fg='white',
+                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                            wraplength=80,
+                            command=lambda: self.video_generator.test_voice_clone() if self.video_generator else None)
+        test_voice_btn.pack(fill=tk.X, padx=5, pady=2)
+
+        jianying_btn = tk.Button(btn_frame, text="🎬\n剪映草稿", 
+                               font=("Microsoft YaHei", 9), bg='#F39C12', fg='white',
+                               relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                               wraplength=80,
+                               command=lambda: self.video_generator.generate_jianying_draft() if self.video_generator else None)
+        jianying_btn.pack(fill=tk.X, padx=5, pady=2)
+        
+        sync_btn = tk.Button(btn_frame, text="⏱️\n同步时序",
+                           font=("Microsoft YaHei", 9), bg='#9B59B6', fg='white',
+                           relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                           wraplength=80,
+                           command=lambda: self.video_generator.process_jianying_draft_timing() if self.video_generator else None)
+        sync_btn.pack(fill=tk.X, padx=5, pady=2)
+
+        screenshot_btn = tk.Button(btn_frame, text="📷\n截图",
+                            font=("Microsoft YaHei", 9), bg='#16A085', fg='white',
+                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                            wraplength=80,
+                            command=lambda: self.video_generator.capture_news_screenshots() if self.video_generator else None)
+        screenshot_btn.pack(fill=tk.X, padx=5, pady=2)
+        
+        main_paned = tk.PanedWindow(video_container, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=4)
+        main_paned.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         left_frame = tk.Frame(main_paned, width=1200)
         main_paned.add(left_frame, minsize=800)
@@ -432,79 +498,19 @@ class EnhancedKioskoDownloader:
                              command=lambda: self.video_generator.delete_news() if self.video_generator else None)
         delete_btn.pack(side=tk.RIGHT)
         
-        btn_frame = tk.Frame(left_frame, bg='#ECF0F1')
-        btn_frame.pack(fill=tk.X, padx=10, pady=(0, 5))
-
-        generate_btn = tk.Button(btn_frame, text="📊 生成数据", 
-                               font=("Microsoft YaHei", 10), bg='#3498DB', fg='white',
-                               relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
-                               command=lambda: self.video_generator.generate_video_data() if self.video_generator else None)
-        generate_btn.pack(side=tk.LEFT)
-        
-        save_btn = tk.Button(btn_frame, text="💾 保存数据", 
-                           font=("Microsoft YaHei", 10), bg='#27AE60', fg='white',
-                           relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
-                           command=lambda: save_data_before() or self.video_generator.save_video_data() if self.video_generator else None)
-        save_btn.pack(side=tk.LEFT, padx=5)
-
-        # 在保存前更新所有文本框的数据
-        def save_data_before():
-            if hasattr(self.video_generator, 'news_textboxes'):
-                for i, textbox_info in enumerate(self.video_generator.news_textboxes):
-                    title = textbox_info['title'].get(1.0, tk.END).strip()
-                    content = textbox_info['content'].get(1.0, tk.END).strip()
-                    if i < len(self.video_generator.video_data):
-                        self.video_generator.video_data[i]['title'] = title
-                        self.video_generator.video_data[i]['content'] = content
-                        print(f"[DEBUG] 更新 video_data[{i}]: {title[:20]}...")
-
-        # 加载CosyVoice模型按钮
-        load_model_btn = tk.Button(btn_frame, text="🔊 加载模型",
-                            font=("Microsoft YaHei", 10), bg='#16A085', fg='white',
-                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
-                            command=lambda: self.video_generator.load_cosyvoice_model() if self.video_generator else None)
-        load_model_btn.pack(side=tk.LEFT, padx=5)
-
-        # 测试音色按钮
-        test_voice_btn = tk.Button(btn_frame, text="🎵 测试音色",
-                            font=("Microsoft YaHei", 10), bg='#E67E22', fg='white',
-                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
-                            command=lambda: self.video_generator.test_voice_clone() if self.video_generator else None)
-        test_voice_btn.pack(side=tk.LEFT, padx=5)
-
-        # 生成剪映草稿按钮
-        jianying_btn = tk.Button(btn_frame, text="🎬 剪映草稿", 
-                               font=("Microsoft YaHei", 10), bg='#F39C12', fg='white',
-                               relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
-                               command=lambda: self.video_generator.generate_jianying_draft() if self.video_generator else None)
-        jianying_btn.pack(side=tk.RIGHT, padx=5)
-        
-        # 同步TTS和字幕时序按钮
-        sync_btn = tk.Button(btn_frame, text="⏱️ 同步时序",
-                           font=("Microsoft YaHei", 10), bg='#9B59B6', fg='white',
-                           relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
-                           command=lambda: self.video_generator.process_jianying_draft_timing() if self.video_generator else None)
-        sync_btn.pack(side=tk.RIGHT, padx=5)
-
-        # 截图按钮
-        screenshot_btn = tk.Button(btn_frame, text="📷 截图",
-                            font=("Microsoft YaHei", 10), bg='#16A085', fg='white',
-                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
-                            command=lambda: self.video_generator.capture_news_screenshots() if self.video_generator else None)
-        screenshot_btn.pack(side=tk.RIGHT, padx=5)
-        
-        # 完美矩形按钮
-        perfect_rect_btn = tk.Button(btn_frame, text="📐 完美矩形",
-                            font=("Microsoft YaHei", 10), bg='#1ABC9C', fg='white',
-                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
+        perfect_rect_btn = tk.Button(btn_frame, text="�\n完美矩形",
+                            font=("Microsoft YaHei", 9), bg='#1ABC9C', fg='white',
+                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                            wraplength=80,
                             command=lambda: self.video_generator.adjust_to_perfect_rectangle() if self.video_generator else None)
-        perfect_rect_btn.pack(side=tk.RIGHT, padx=5)
+        perfect_rect_btn.pack(fill=tk.X, padx=5, pady=2)
 
-        video_btn = tk.Button(btn_frame, text="🎬 生成视频",
-                            font=("Microsoft YaHei", 10), bg='#E74C3C', fg='white',
-                            relief=tk.FLAT, padx=10, pady=5, cursor='hand2',
+        video_btn = tk.Button(btn_frame, text="🎬\n生成视频",
+                            font=("Microsoft YaHei", 9), bg='#E74C3C', fg='white',
+                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                            wraplength=80,
                             command=lambda: self.video_generator.generate_video() if self.video_generator else None)
-        video_btn.pack(side=tk.RIGHT)
+        video_btn.pack(fill=tk.X, padx=5, pady=2)
 
         right_frame = tk.Frame(main_paned, width=400)
         main_paned.add(right_frame, minsize=300)

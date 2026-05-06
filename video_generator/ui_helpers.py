@@ -380,16 +380,16 @@ class UIHelpers:
             
             # 标题文本框
             title_text = tk.Text(news_item, font=("Microsoft YaHei", 12, "bold"), 
-                               bg='#f8f9fa', height=1, wrap=tk.WORD, borderwidth=0)
+                               bg='#f8f9fa', height=1, width=70, wrap=tk.WORD, borderwidth=0)
             title_text.insert(tk.END, news['title'])
-            title_text.pack(side=tk.TOP, fill=tk.X, padx=5, pady=(2, 1))
+            title_text.pack(side=tk.TOP, padx=5, pady=(2, 1))
             title_text.bind('<FocusOut>', lambda e, idx=i, key='title': self.on_news_text_change(e, idx, key))
             
             # 内容文本框
             content_text = tk.Text(news_item, font=("Microsoft YaHei", 11), 
-                                 bg='white', height=3, wrap=tk.WORD, borderwidth=0)
+                                 bg='white', height=3, width=70, wrap=tk.WORD, borderwidth=0)
             content_text.insert(tk.END, news['content'])
-            content_text.pack(side=tk.TOP, fill=tk.X, padx=5, pady=(1, 2))
+            content_text.pack(side=tk.TOP, padx=5, pady=(1, 2))
             content_text.bind('<FocusOut>', lambda e, idx=i, key='content': self.on_news_text_change(e, idx, key))
             
             # 按钮容器

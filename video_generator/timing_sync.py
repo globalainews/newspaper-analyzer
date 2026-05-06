@@ -349,6 +349,8 @@ class TimingSynchronizer:
                 if material_id:
                     material_to_text_map[material_id] = seg
 
+            gap_04s = 400000
+
             text_position_map = {}
             update_count = 0
             for idx, timing in enumerate(new_timing):
@@ -359,7 +361,7 @@ class TimingSynchronizer:
                     if 'target_timerange' not in text_seg:
                         text_seg['target_timerange'] = {}
                     text_seg['target_timerange']['start'] = timing.get('new_start', 0)
-                    text_seg['target_timerange']['duration'] = timing.get('new_duration', 0)
+                    text_seg['target_timerange']['duration'] = timing.get('new_duration', 0) + gap_04s
 
                     tts_id = timing.get('id')
                     if 'text_to_audio_ids' not in text_seg:
@@ -382,7 +384,6 @@ class TimingSynchronizer:
                 subtitle_end = timing.get('new_start', 0) + timing.get('new_duration', 0)
                 if subtitle_end > last_subtitle_end:
                     last_subtitle_end = subtitle_end
-            gap_04s = 400000
             last_position_start = last_subtitle_end + gap_04s
 
             materials = data.get('materials', {})
@@ -439,7 +440,7 @@ class TimingSynchronizer:
                     if 'target_timerange' not in sticker_seg:
                         sticker_seg['target_timerange'] = {}
                     sticker_seg['target_timerange']['start'] = timing.get('new_start', 0)
-                    sticker_seg['target_timerange']['duration'] = timing.get('new_duration', 0)
+                    sticker_seg['target_timerange']['duration'] = timing.get('new_duration', 0) + gap_04s
 
                     if news_data and idx < len(news_data):
                         news = news_data[idx]
@@ -488,7 +489,6 @@ class TimingSynchronizer:
             photos_to_align.sort(key=lambda x: x['material_name'])
 
             # 计算每个 photo 的位置
-            gap_04s = 400000
             if photos_to_align and new_timing:
                 for idx_photo, photo_info in enumerate(photos_to_align):
                     photo_id = photo_info['id']
