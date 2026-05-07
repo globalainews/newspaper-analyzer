@@ -167,6 +167,24 @@ class DataManager:
             print(f"[DEBUG save_video_data] current_image_file = {self.current_image_file}")
             print(f"[DEBUG save_video_data] analysis_dir = {self.analysis_dir}")
 
+            # 检查并添加广告文本到最后一条新闻
+            if self.video_data:
+                # 读取配置文件中的广告文本
+                import json
+                config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
+                ad_text = ""
+                if os.path.exists(config_path):
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                        ad_text = config.get('cosyvoice', {}).get('ad_text', '')
+                
+                if ad_text:
+                    last_news = self.video_data[-1]
+                    last_content = last_news.get('content', '').strip()
+                    if not last_content.startswith(ad_text):
+                        last_news['content'] = ad_text + last_content
+                        print(f"[DEBUG save_video_data] 已添加广告文本到最后一条新闻")
+
             saved = False
             saved_path = None
 

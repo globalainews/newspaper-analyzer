@@ -289,6 +289,10 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                 screenshot_filename = f"P{i+1}.jpg"
                 screenshot_path = os.path.join(resources_dir, screenshot_filename)
 
+                # JPEG不支持RGBA，需要转换
+                if cropped.mode == 'RGBA':
+                    cropped = cropped.convert('RGB')
+
                 # 保存为JPEG格式
                 cropped.save(screenshot_path, 'JPEG', quality=95)
                 screenshot_count += 1
