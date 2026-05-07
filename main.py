@@ -554,7 +554,7 @@ class EnhancedKioskoDownloader:
         main_paned.pack(fill=tk.BOTH, expand=True)
         
         video_container = tk.Frame(main_paned, bg='#F5F6FA')
-        main_paned.add(video_container, minsize=340, height=360)
+        main_paned.add(video_container, minsize=380, height=400)
         
         video_header = tk.Frame(video_container, bg='#E74C3C', height=40)
         video_header.pack(fill=tk.X)
