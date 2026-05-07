@@ -649,15 +649,6 @@ class EnhancedKioskoDownloader:
                                 relief=tk.SOLID, bd=1, highlightthickness=0)
         source_entry.pack(fill=tk.X, pady=3, ipady=4)
         
-        # 从配置文件加载信息来源
-        try:
-            import json
-            with open('config.json', 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                self.source_from_var.set(config.get('cosyvoice', {}).get('source_from', ''))
-        except Exception as e:
-            print(f"加载信息来源失败: {e}")
-        
         wechat_container = tk.Frame(main_paned, bg='#F5F6FA')
         main_paned.add(wechat_container, minsize=280)
         
@@ -776,6 +767,9 @@ class EnhancedKioskoDownloader:
             
             if 'short_title' in data:
                 self.short_title_var.set(data['short_title'])
+            
+            if 'source_from' in data:
+                self.source_from_var.set(data['source_from'])
             
             if 'wechat_article' in data:
                 article = data['wechat_article']
