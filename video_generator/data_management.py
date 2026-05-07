@@ -257,6 +257,9 @@ class DataManager:
             if saved and saved_path:
                 self.update_progress("数据保存成功", 100, "#27AE60")
                 self.show_info("成功", f"视频数据保存成功!\n\n已保存到: {saved_path}")
+                # 刷新新闻列表显示最新文本
+                if hasattr(self, 'update_news_list'):
+                    self.update_news_list()
                 print(f"[DEBUG save_video_data] 保存成功，返回 True")
                 return True
             else:

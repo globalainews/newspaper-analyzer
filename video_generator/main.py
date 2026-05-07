@@ -416,6 +416,45 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                 new_x2 = min(img_width, int(new_x2))
                 new_y2 = min(img_height, int(new_y2))
                 
+                # 检查是否靠边导致尺寸不对，如果是则移动矩形
+                actual_width = new_x2 - new_x1
+                actual_height = new_y2 - new_y1
+                if actual_width < new_width * 0.95 or actual_height < new_height * 0.95:
+                    # 需要移动矩形
+                    target_width = min(new_width, img_width * 0.95)
+                    target_height = target_width / target_ratio
+                    
+                    if target_height > img_height * 0.95:
+                        target_height = min(new_height, img_height * 0.95)
+                        target_width = target_height * target_ratio
+                    
+                    # 尝试向中间移动
+                    offset_x = 0
+                    offset_y = 0
+                    
+                    if new_x1 == 0:
+                        offset_x = (new_width - actual_width) / 2
+                    elif new_x2 == img_width:
+                        offset_x = -(new_width - actual_width) / 2
+                    
+                    if new_y1 == 0:
+                        offset_y = (new_height - actual_height) / 2
+                    elif new_y2 == img_height:
+                        offset_y = -(new_height - actual_height) / 2
+                    
+                    # 如果单边靠，尝试向反方向移动
+                    if offset_x == 0 and offset_y == 0:
+                        # 尝试整体移动
+                        if center_x < img_width / 2:
+                            offset_x = min((img_width - new_width) - center_x + new_width / 2, new_width / 2)
+                        else:
+                            offset_x = max(center_x - new_width / 2 - 0, -new_width / 2)
+                    
+                    new_x1 = max(0, min(img_width - target_width, int(center_x - target_width / 2 + offset_x)))
+                    new_y1 = max(0, min(img_height - target_height, int(center_y - target_height / 2 + offset_y)))
+                    new_x2 = int(new_x1 + target_width)
+                    new_y2 = int(new_y1 + target_height)
+                
                 news['position'] = [new_x1, new_y1, new_x2, new_y2]
                 adjusted_count += 1
                 print(f"新闻 {i+1}: 调整为3:4比例 [{new_x1}, {new_y1}, {new_x2}, {new_y2}]")
