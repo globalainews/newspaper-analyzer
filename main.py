@@ -554,7 +554,7 @@ class EnhancedKioskoDownloader:
         main_paned.pack(fill=tk.BOTH, expand=True)
         
         video_container = tk.Frame(main_paned, bg='#F5F6FA')
-        main_paned.add(video_container, minsize=260, height=280)
+        main_paned.add(video_container, minsize=300, height=320)
         
         video_header = tk.Frame(video_container, bg='#E74C3C', height=40)
         video_header.pack(fill=tk.X)
@@ -610,7 +610,7 @@ class EnhancedKioskoDownloader:
                  font=("Segoe UI Emoji", 10), bg='#3498DB', fg='white',
                  relief=tk.FLAT, padx=5, pady=0, cursor='hand2').pack(side=tk.LEFT, padx=6)
         
-        self.video_desc_text = tk.Text(video_info_frame, height=2, 
+        self.video_desc_text = tk.Text(video_info_frame, height=4, 
                                        font=("Microsoft YaHei", 10),
                                        wrap=tk.WORD, relief=tk.SOLID, bd=1,
                                        highlightthickness=0, bg='#FAFAFA')
