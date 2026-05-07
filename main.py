@@ -554,7 +554,7 @@ class EnhancedKioskoDownloader:
         main_paned.pack(fill=tk.BOTH, expand=True)
         
         video_container = tk.Frame(main_paned, bg='#F5F6FA')
-        main_paned.add(video_container, minsize=300, height=320)
+        main_paned.add(video_container, minsize=340, height=360)
         
         video_header = tk.Frame(video_container, bg='#E74C3C', height=40)
         video_header.pack(fill=tk.X)
@@ -631,6 +631,32 @@ class EnhancedKioskoDownloader:
                                      font=("Microsoft YaHei", 10),
                                      relief=tk.SOLID, bd=1, highlightthickness=0)
         short_title_entry.pack(fill=tk.X, pady=3, ipady=4)
+        
+        # 信息来源
+        source_label_frame = tk.Frame(video_info_frame, bg='white')
+        source_label_frame.pack(fill=tk.X)
+        tk.Label(source_label_frame, text="信息来源", bg='white', 
+                font=("Microsoft YaHei", 9), fg='#7F8C8D').pack(side=tk.LEFT)
+        tk.Button(source_label_frame, text="📋", 
+                 command=lambda: self.copy_var_to_clipboard(self.source_from_var),
+                 font=("Segoe UI Emoji", 10), bg='#3498DB', fg='white',
+                 relief=tk.FLAT, padx=5, pady=0, cursor='hand2').pack(side=tk.LEFT, padx=6)
+        
+        self.source_from_var = tk.StringVar()
+        source_entry = tk.Entry(video_info_frame, 
+                                textvariable=self.source_from_var, 
+                                font=("Microsoft YaHei", 10),
+                                relief=tk.SOLID, bd=1, highlightthickness=0)
+        source_entry.pack(fill=tk.X, pady=3, ipady=4)
+        
+        # 从配置文件加载信息来源
+        try:
+            import json
+            with open('config.json', 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                self.source_from_var.set(config.get('cosyvoice', {}).get('source_from', ''))
+        except Exception as e:
+            print(f"加载信息来源失败: {e}")
         
         wechat_container = tk.Frame(main_paned, bg='#F5F6FA')
         main_paned.add(wechat_container, minsize=280)
