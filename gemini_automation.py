@@ -2,6 +2,7 @@
 import os
 import time
 from playwright.sync_api import sync_playwright
+from browser_manager import browser_manager
 
 
 class GeminiAutomation:
@@ -23,13 +24,21 @@ class GeminiAutomation:
             self.status_callback(message)
     
     def connect_to_chrome(self):
-        """连接到已启动的Chrome调试实例"""
+        """使用browser_manager连接或启动Chrome调试实例"""
         try:
             self.update_status("连接到Chrome...")
-            self.playwright = sync_playwright().start()
-            self.browser = self.playwright.chromium.connect_over_cdp('http://127.0.0.1:9222')
-            self.update_status("已连接到Chrome")
-            return True
+            
+            if not browser_manager.start_chrome(self.update_status):
+                self.update_status("无法连接到Chrome")
+                return False
+                
+            self.browser = browser_manager.get_browser()
+            if self.browser and browser_manager.is_connected:
+                self.update_status("已连接到Chrome")
+                return True
+            else:
+                self.update_status("浏览器连接失败")
+                return False
         except Exception as e:
             self.update_status(f"连接Chrome失败: {str(e)}")
             print(f"[Gemini] 连接Chrome失败: {e}")
@@ -313,8 +322,5 @@ class GeminiAutomation:
             traceback.print_exc()
             return None
         finally:
-            try:
-                if self.playwright:
-                    self.playwright.stop()
-            except:
-                pass
+            # 使用browser_manager管理浏览器，不需要手动关闭
+            pass

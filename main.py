@@ -374,13 +374,6 @@ class EnhancedKioskoDownloader:
         btn_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
         btn_frame.pack_propagate(False)
         
-        generate_btn = tk.Button(btn_frame, text="📊\n生成数据", 
-                               font=("Microsoft YaHei", 9), bg='#3498DB', fg='white',
-                               relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
-                               wraplength=80,
-                               command=lambda: self.video_generator.generate_video_data() if self.video_generator else None)
-        generate_btn.pack(fill=tk.X, padx=5, pady=2)
-        
         save_btn = tk.Button(btn_frame, text="💾\n保存数据", 
                            font=("Microsoft YaHei", 9), bg='#27AE60', fg='white',
                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
@@ -405,13 +398,6 @@ class EnhancedKioskoDownloader:
                             command=lambda: self.video_generator.load_cosyvoice_model() if self.video_generator else None)
         load_model_btn.pack(fill=tk.X, padx=5, pady=2)
 
-        test_voice_btn = tk.Button(btn_frame, text="🎵\n测试音色",
-                            font=("Microsoft YaHei", 9), bg='#E67E22', fg='white',
-                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
-                            wraplength=80,
-                            command=lambda: self.video_generator.test_voice_clone() if self.video_generator else None)
-        test_voice_btn.pack(fill=tk.X, padx=5, pady=2)
-
         jianying_btn = tk.Button(btn_frame, text="🎬\n剪映草稿", 
                                font=("Microsoft YaHei", 9), bg='#F39C12', fg='white',
                                relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
@@ -432,7 +418,35 @@ class EnhancedKioskoDownloader:
                             wraplength=80,
                             command=lambda: self.video_generator.capture_news_screenshots() if self.video_generator else None)
         screenshot_btn.pack(fill=tk.X, padx=5, pady=2)
-        
+
+        perfect_rect_btn = tk.Button(btn_frame, text="�\n完美矩形",
+                            font=("Microsoft YaHei", 9), bg='#1ABC9C', fg='white',
+                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                            wraplength=80,
+                            command=lambda: self.video_generator.adjust_to_perfect_rectangle() if self.video_generator else None)
+        perfect_rect_btn.pack(fill=tk.X, padx=5, pady=2)
+
+        video_btn = tk.Button(btn_frame, text="🎬\n生成视频",
+                            font=("Microsoft YaHei", 9), bg='#E74C3C', fg='white',
+                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                            wraplength=80,
+                            command=lambda: self.video_generator.generate_video() if self.video_generator else None)
+        video_btn.pack(fill=tk.X, padx=5, pady=2)
+
+        generate_btn = tk.Button(btn_frame, text="📊\n生成数据", 
+                               font=("Microsoft YaHei", 9), bg='#3498DB', fg='white',
+                               relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                               wraplength=80,
+                               command=lambda: self.video_generator.generate_video_data() if self.video_generator else None)
+        generate_btn.pack(fill=tk.X, padx=5, pady=2)
+
+        test_voice_btn = tk.Button(btn_frame, text="🎵\n测试音色",
+                            font=("Microsoft YaHei", 9), bg='#E67E22', fg='white',
+                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                            wraplength=80,
+                            command=lambda: self.video_generator.test_voice_clone() if self.video_generator else None)
+        test_voice_btn.pack(fill=tk.X, padx=5, pady=2)
+
         main_paned = tk.PanedWindow(video_container, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=4)
         main_paned.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
@@ -497,20 +511,6 @@ class EnhancedKioskoDownloader:
                              relief=tk.FLAT, padx=8, pady=4, cursor='hand2',
                              command=lambda: self.video_generator.delete_news() if self.video_generator else None)
         delete_btn.pack(side=tk.RIGHT)
-        
-        perfect_rect_btn = tk.Button(btn_frame, text="�\n完美矩形",
-                            font=("Microsoft YaHei", 9), bg='#1ABC9C', fg='white',
-                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
-                            wraplength=80,
-                            command=lambda: self.video_generator.adjust_to_perfect_rectangle() if self.video_generator else None)
-        perfect_rect_btn.pack(fill=tk.X, padx=5, pady=2)
-
-        video_btn = tk.Button(btn_frame, text="🎬\n生成视频",
-                            font=("Microsoft YaHei", 9), bg='#E74C3C', fg='white',
-                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
-                            wraplength=80,
-                            command=lambda: self.video_generator.generate_video() if self.video_generator else None)
-        video_btn.pack(fill=tk.X, padx=5, pady=2)
 
         right_frame = tk.Frame(main_paned, width=400)
         main_paned.add(right_frame, minsize=300)
