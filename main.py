@@ -195,6 +195,17 @@ class EnhancedKioskoDownloader:
                 font=("Microsoft YaHei", 12, "bold"),
                 bg='#34495E', fg='white').pack(side=tk.LEFT, padx=10, pady=8)
         
+        # 排序方式切换按钮
+        self.sort_by_var = tk.StringVar(value='按日期')
+        sort_btn = tk.Button(list_header, 
+                            textvariable=self.sort_by_var,
+                            font=("Microsoft YaHei", 9),
+                            bg='#2C3E50', fg='white',
+                            relief=tk.FLAT, padx=8, pady=2,
+                            cursor='hand2',
+                            command=self.toggle_sort)
+        sort_btn.pack(side=tk.RIGHT, padx=(0, 5))
+        
         self.image_count_label = tk.Label(list_header, text="共 0 张",
                                          font=("Microsoft YaHei", 9),
                                          bg='#34495E', fg='#BDC3C7')
@@ -419,7 +430,7 @@ class EnhancedKioskoDownloader:
                             command=lambda: self.video_generator.capture_news_screenshots() if self.video_generator else None)
         screenshot_btn.pack(fill=tk.X, padx=5, pady=2)
 
-        perfect_rect_btn = tk.Button(btn_frame, text="�\n完美矩形",
+        perfect_rect_btn = tk.Button(btn_frame, text="📐\n完美矩形",
                             font=("Microsoft YaHei", 9), bg='#1ABC9C', fg='white',
                             relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
                             wraplength=80,
@@ -775,12 +786,18 @@ class EnhancedKioskoDownloader:
                 article = data['wechat_article']
                 if 'title' in article:
                     self.wechat_title_var.set(article['title'])
-                # 公众号正文包含summary和content
+                # 公众号正文包含所有字段：summary、content、english_tip、footer、tags
                 content_parts = []
                 if 'summary' in article:
                     content_parts.append(article['summary'])
                 if 'content' in article:
                     content_parts.append(article['content'])
+                if 'english_tip' in article:
+                    content_parts.append(article['english_tip'])
+                if 'footer' in article:
+                    content_parts.append(article['footer'])
+                if 'tags' in article and article['tags']:
+                    content_parts.append(' '.join(article['tags']))
                 if content_parts:
                     self.wechat_content_text.delete(1.0, tk.END)
                     self.wechat_content_text.insert(tk.END, '\n\n'.join(content_parts))
@@ -1321,7 +1338,9 @@ class EnhancedKioskoDownloader:
     
     def refresh_image_list(self):
         self.image_listbox.delete(0, tk.END)
-        image_files = refresh_image_list(self.download_dir)
+        # 获取当前排序方式，默认按日期
+        sort_mode = getattr(self, 'current_sort_mode', 'date')
+        image_files = refresh_image_list(self.download_dir, sort_mode)
         for filename in image_files:
             self.image_listbox.insert(tk.END, filename)
         self.image_count_label.config(text=f"共 {len(image_files)} 张")
@@ -1329,7 +1348,21 @@ class EnhancedKioskoDownloader:
             self.image_listbox.selection_set(0)
             self.image_listbox.activate(0)
             self.root.after(100, lambda: self.image_listbox.event_generate('<<ListboxSelect>>'))
-    
+
+    def toggle_sort(self):
+        """切换排序方式：按日期 ↔ 按文件名"""
+        if not hasattr(self, 'current_sort_mode'):
+            self.current_sort_mode = 'date'
+        
+        if self.current_sort_mode == 'date':
+            self.current_sort_mode = 'name'
+            self.sort_by_var.set('按文件名')
+        else:
+            self.current_sort_mode = 'date'
+            self.sort_by_var.set('按日期')
+        
+        self.refresh_image_list()
+
     def on_news_select(self, event):
         if self.video_generator:
             self.video_generator.on_news_select(event)

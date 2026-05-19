@@ -76,10 +76,21 @@ def export_image(source_filepath, export_dir, filename):
         return False, f"导出图片时出错:\n{str(e)}"
 
 
-def refresh_image_list(download_dir):
-    """刷新图片列表，按修改日期倒序排列"""
+def refresh_image_list(download_dir, sort_by='date'):
+    """刷新图片列表
+    Args:
+        download_dir: 下载目录
+        sort_by: 排序方式 'date' 按日期, 'name' 按文件名
+    Returns:
+        排序后的图片文件列表（倒序）
+    """
     image_files = []
     if os.path.exists(download_dir):
         image_files = [f for f in os.listdir(download_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-        image_files = sorted(image_files, key=lambda f: os.path.getmtime(os.path.join(download_dir, f)), reverse=True)
+        if sort_by == 'date':
+            # 按修改日期倒序
+            image_files = sorted(image_files, key=lambda f: os.path.getmtime(os.path.join(download_dir, f)), reverse=True)
+        else:
+            # 按文件名倒序
+            image_files = sorted(image_files, key=lambda f: f.lower(), reverse=True)
     return image_files

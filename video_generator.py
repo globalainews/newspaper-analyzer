@@ -691,8 +691,8 @@ class VideoGenerator:
                 if cropped.mode == 'RGBA':
                     cropped = cropped.convert('RGB')
 
-                # 保存为JPEG格式
-                cropped.save(screenshot_path, 'JPEG', quality=95)
+                # 保存为JPEG格式，使用最高质量
+                cropped.save(screenshot_path, 'JPEG', quality=100, optimize=True)
                 screenshot_count += 1
                 print(f"保存截图: {screenshot_path}")
 
