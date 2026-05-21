@@ -167,6 +167,18 @@ class DataManager:
             print(f"[DEBUG save_video_data] current_image_file = {self.current_image_file}")
             print(f"[DEBUG save_video_data] analysis_dir = {self.analysis_dir}")
 
+            # 处理新闻内容：去掉末尾的逗号
+            if self.video_data:
+                for news in self.video_data:
+                    content = news.get('content', '')
+                    if content:
+                        # 去掉末尾的逗号（包括中英文逗号）
+                        content = content.rstrip()
+                        while content.endswith(',') or content.endswith('，'):
+                            content = content[:-1].rstrip()
+                        news['content'] = content
+                print(f"[DEBUG save_video_data] 已处理新闻内容末尾逗号")
+
             # 检查并添加广告文本到最后一条新闻
             if self.video_data:
                 # 读取配置文件中的广告文本
