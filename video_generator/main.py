@@ -2,6 +2,7 @@
 # 主视频生成器类
 
 import os
+import json
 import datetime
 import tkinter as tk
 from tkinter import messagebox, simpledialog
@@ -236,7 +237,7 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
             self.show_info("成功", f"已删除 {selected_count} 条新闻!")
 
     def capture_news_screenshots(self):
-        """根据新闻矩形框截图并保存"""
+        """根据新闻矩形框截图并保存，同时更新草稿素材的宽高"""
         try:
             if not self.video_data:
                 self.show_warning("警告", "没有新闻数据")
@@ -262,6 +263,9 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
             # 创建Resources目录
             os.makedirs(resources_dir, exist_ok=True)
 
+            # 保存每张截图的实际尺寸
+            screenshot_sizes = {}
+
             # 遍历所有新闻，截取对应的区域
             screenshot_count = 0
             for i, news in enumerate(self.video_data):
@@ -284,6 +288,10 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
 
                 # 裁剪图片
                 cropped = pil_image.crop((x1, y1, x2, y2))
+                
+                # 记录实际尺寸
+                actual_width, actual_height = cropped.size
+                screenshot_sizes[f"P{i+1}.jpg"] = {'width': actual_width, 'height': actual_height}
 
                 # 保存图片，命名格式：P1.jpg, P2.jpg, ...
                 screenshot_filename = f"P{i+1}.jpg"
@@ -296,9 +304,12 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                 # 保存为JPEG格式
                 cropped.save(screenshot_path, 'JPEG', quality=95)
                 screenshot_count += 1
-                print(f"保存截图: {screenshot_path}")
+                print(f"保存截图: {screenshot_path} (尺寸: {actual_width}x{actual_height})")
 
             if screenshot_count > 0:
+                # 更新草稿素材的宽高
+                self.update_draft_material_sizes(draft_name, screenshot_sizes)
+                
                 self.update_progress(f"截图保存成功 ({screenshot_count} 张)", 100, "#27AE60")
                 self.show_info("成功", f"截图保存成功！\n\n共保存 {screenshot_count} 张图片\n\n目录: {resources_dir}")
             else:
@@ -307,6 +318,43 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
         except Exception as e:
             self.update_progress(f"截图失败: {str(e)}", 0, "#E74C3C")
             self.show_error("错误", f"截图失败:\n{str(e)}")
+    
+    def update_draft_material_sizes(self, draft_name, screenshot_sizes):
+        """更新草稿素材中P图片的宽高"""
+        try:
+            draft_dir = os.path.join(self.jianying_drafts_dir, draft_name)
+            draft_content_path = os.path.join(draft_dir, 'draft_content.json')
+            
+            if not os.path.exists(draft_content_path):
+                print(f"[警告] 草稿文件不存在: {draft_content_path}")
+                return
+            
+            # 读取草稿文件
+            with open(draft_content_path, 'r', encoding='utf-8') as f:
+                draft_content = json.load(f)
+            
+            # 更新videos素材中的P图片宽高
+            materials = draft_content.get('materials', {})
+            videos = materials.get('videos', [])
+            
+            updated_count = 0
+            for video in videos:
+                material_name = video.get('material_name', '')
+                if material_name in screenshot_sizes:
+                    size_info = screenshot_sizes[material_name]
+                    video['width'] = size_info['width']
+                    video['height'] = size_info['height']
+                    print(f"[已更新] 素材 {material_name}: width={size_info['width']}, height={size_info['height']}")
+                    updated_count += 1
+            
+            # 保存更新后的草稿文件
+            with open(draft_content_path, 'w', encoding='utf-8') as f:
+                json.dump(draft_content, f, ensure_ascii=False, indent=4)
+            
+            print(f"[成功] 已更新 {updated_count} 个素材的尺寸")
+            
+        except Exception as e:
+            print(f"[错误] 更新草稿素材尺寸失败: {str(e)}")
 
     def export_news_images(self):
         """导出新闻图片"""

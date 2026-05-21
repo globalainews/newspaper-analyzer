@@ -484,15 +484,41 @@ class TimingSynchronizer:
                             'id': video.get('id'),
                             'material_name': material_name,
                             'item': video,
+                            'width': video.get('width', 0),
+                            'height': video.get('height', 0)
                         })
 
             photos_to_align.sort(key=lambda x: x['material_name'])
+            print(f"[调试] 找到 {len(photos_to_align)} 个待对齐的P图片")
+            for photo in photos_to_align:
+                print(f"[调试] 图片 {photo['material_name']}: id={photo['id']}, width={photo['width']}, height={photo['height']}")
 
-            # 计算每个 photo 的位置
+            # 获取canvas配置 - 根据报纸类型使用不同的尺寸
+            newspaper_type = '金融时报'
+            # 通过图片文件名判断报纸类型
+            if hasattr(self, 'current_image_file') and self.current_image_file:
+                filename = os.path.basename(self.current_image_file).lower()
+                if "wall" in filename or "wsj" in filename:
+                    newspaper_type = "华尔街日报"
+                elif "financial" in filename or "ft" in filename:
+                    newspaper_type = "金融时报"
+            
+            if newspaper_type == '华尔街日报':
+                canvas_width = 1200
+                canvas_height = 1600
+            else:  # 金融时报
+                canvas_width = 600
+                canvas_height = 800
+            print(f"[调试] 报纸类型: {newspaper_type}, canvas配置: width={canvas_width}, height={canvas_height}")
+
+            # 计算每个 photo 的位置和scale
             if photos_to_align and new_timing:
+                print(f"[调试] 开始计算scale，new_timing长度: {len(new_timing)}")
                 for idx_photo, photo_info in enumerate(photos_to_align):
                     photo_id = photo_info['id']
                     photo_item = photo_info['item']
+                    photo_width = photo_info.get('width', 0)
+                    photo_height = photo_info.get('height', 0)
 
                     if idx_photo < len(new_timing):
                         timing = new_timing[idx_photo]
@@ -519,6 +545,41 @@ class TimingSynchronizer:
                                         segment['target_timerange']['duration'] = new_duration
 
                                     photo_item['duration'] = new_duration
+
+                                    # 计算并设置scale
+                                    if photo_width > 0 and photo_height > 0:
+                                        # 设置参数
+                                        goodratio = 3 / 4  # 完美宽高比例
+                                        ScreenRatio = 1620 / 2700  # 屏幕宽高比
+                                        photo_ratio = photo_width / photo_height  # 素材宽高比
+                                        
+                                        # 根据素材宽高比设置scale
+                                        if photo_ratio > goodratio:
+                                            scale = 0.95
+                                        elif photo_ratio < goodratio and photo_ratio < ScreenRatio:
+                                            scale = 0.7
+                                        else:
+                                            scale = 0.8  # 默认值，处理其他情况
+                                        
+                                        print(f"[调试] 图片 {photo_info['material_name']}: 宽高比={photo_ratio:.4f}, goodratio={goodratio:.4f}, ScreenRatio={ScreenRatio:.4f}, scale={scale}")
+                                        
+                                        # 更新素材的clip.transform
+                                        if 'clip' not in segment:
+                                            segment['clip'] = {}
+                                        if 'scale' not in segment['clip']:
+                                            segment['clip']['scale'] = {}
+                                        segment['clip']['scale']['x'] = scale
+                                        segment['clip']['scale']['y'] = scale
+                                        
+                                        # 设置transform偏移为0（左上角对齐）
+                                        if 'transform' not in segment['clip']:
+                                            segment['clip']['transform'] = {}
+                                        segment['clip']['transform']['x'] = 0.0
+                                        segment['clip']['transform']['y'] = 0.0
+                                        
+                                        print(f"[已更新] {photo_info['material_name']} scale={scale:.6f}, transform=(0.0, 0.0)")
+                                    else:
+                                        print(f"[警告] {photo_info['material_name']} 尺寸无效 (width={photo_width}, height={photo_height})，跳过scale计算")
                                     break
 
             # 处理翻页sound素材（翻页1、翻页2等）与P1.jpg、P2.jpg对齐
@@ -573,6 +634,8 @@ class TimingSynchronizer:
             video_duration = 0
             video_material_id = None
             videos = materials.get('videos', [])
+            
+            # 遍历视频素材，查找目标视频
             for video in videos:
                 if video.get('local_material_id') == video_material_local_id:
                     video_duration = video.get('duration', 0)
