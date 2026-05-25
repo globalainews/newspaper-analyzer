@@ -9,8 +9,8 @@ import datetime
 import tkinter as tk
 from tkinter import filedialog
 class VideoCreator:
-    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
-        pass
+    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None, main_app=None):
+        self.main_app = main_app
     
     def generate_video(self):
         """生成视频"""

@@ -2,11 +2,14 @@
 # UI辅助模块
 
 import os
+import glob
+import datetime
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageDraw, ImageFont
+
 class UIHelpers:
-    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
+    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None, main_app=None):
         self.preview_photo = None
         self.selection_start = None
         self.selection_rect = None
@@ -15,6 +18,7 @@ class UIHelpers:
         self.progress_frame = None  # 进度层框架
         self.progress_label = None
         self.progress_bar_widget = None
+        self.main_app = main_app
     
     def show_fullscreen_progress(self, title, message, progress=0):
         """显示在当前窗口中间的进度层
@@ -287,6 +291,7 @@ class UIHelpers:
                     canvas.bind("<Button-1>", lambda e: self.on_preview_click(e, canvas, orig_width, orig_height, ratio, x_offset, y_offset))
                     canvas.bind("<B1-Motion>", lambda e: self.on_preview_drag(e, canvas, orig_width, orig_height, ratio, x_offset, y_offset))
                     canvas.bind("<ButtonRelease-1>", self.on_preview_release)
+                    canvas.bind("<Double-1>", lambda e: self.on_preview_double_click(e))
                     
                     # 存储当前状态
                     self.drag_data = {
@@ -410,13 +415,26 @@ class UIHelpers:
                                    command=lambda idx=i: self.generate_news_audio(idx))
             generate_btn.pack(side=tk.LEFT)
             
+            # 图片路径显示标签（可点击高亮）
+            news_pic_path = news.get('news_pic', '')
+            pic_label_text = f"📷 {os.path.basename(news_pic_path)}" if news_pic_path else "📷 未设置图片"
+            news_pic_label = tk.Label(btn_container, text=pic_label_text,
+                                     font=("Microsoft YaHei", 8), bg='white', fg='#3498DB',
+                                     anchor='w', cursor='hand2')
+            news_pic_label.pack(side=tk.RIGHT, padx=(5, 0))
+            # 绑定点击事件
+            news_pic_label.bind('<Button-1>', lambda e, path=news_pic_path, label=news_pic_label: self.highlight_image_in_browser(path, label))
+            # 绑定双击事件 - 清空图片路径
+            news_pic_label.bind('<Double-1>', lambda e, index=i, label=news_pic_label: self.clear_news_pic_path(index, label))
+            
             # 存储文本框引用
             self.news_textboxes.append({
                 'frame': news_item,
                 'title': title_text,
                 'content': content_text,
                 'play_btn': play_btn,
-                'generate_btn': generate_btn
+                'generate_btn': generate_btn,
+                'news_pic_label': news_pic_label
             })
             self.news_selections.append(False)
         
@@ -950,3 +968,385 @@ class UIHelpers:
         x, y = point
         x1, y1, x2, y2 = bbox
         return x1 <= x <= x2 and y1 <= y <= y2
+    
+    def refresh_download_images(self):
+        """刷新下载目录图片列表，显示缩略图"""
+        download_dir = r'F:\Administrator\Downloads'
+        
+        # 获取主窗口中的 Canvas
+        canvas = None
+        if hasattr(self, 'main_app') and self.main_app:
+            if hasattr(self.main_app, 'download_images_canvas'):
+                canvas = self.main_app.download_images_canvas
+        
+        if not canvas:
+            return
+        
+        # 清空 Canvas
+        canvas.delete('all')
+        
+        # 清除旧的缩略图引用
+        if hasattr(self.main_app, 'download_thumbnail_images'):
+            self.main_app.download_thumbnail_images.clear()
+        
+        # 超大缩略图配置（放大50%）
+        thumb_width = 210
+        thumb_height = 158
+        padding = 8
+        columns = 2  # 每行显示2个缩略图
+        
+        # 获取今天的日期
+        today = datetime.datetime.now().date()
+        
+        # 查找下载目录中的图片文件（只显示今天的）
+        if os.path.exists(download_dir):
+            image_files = []
+            for ext in ['*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp']:
+                image_files.extend(glob.glob(os.path.join(download_dir, ext)))
+            
+            # 过滤只保留今天的图片
+            today_image_files = []
+            for filepath in image_files:
+                try:
+                    file_mtime = datetime.datetime.fromtimestamp(os.path.getmtime(filepath)).date()
+                    if file_mtime == today:
+                        today_image_files.append(filepath)
+                except:
+                    continue
+            
+            image_files = today_image_files
+            
+            # 按修改时间倒序排列
+            image_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            
+            row = 0
+            col = 0
+            x_offset = padding
+            y_offset = padding
+            
+            for filepath in image_files:
+                try:
+                    # 打开原图
+                    img = Image.open(filepath)
+                    img.thumbnail((thumb_width, thumb_height), Image.LANCZOS)
+                    
+                    # 转换为 PhotoImage
+                    photo = ImageTk.PhotoImage(img)
+                    
+                    # 存储引用防止垃圾回收
+                    if hasattr(self.main_app, 'download_thumbnail_images'):
+                        self.main_app.download_thumbnail_images[filepath] = photo
+                    
+                    # 计算位置
+                    x = x_offset + col * (thumb_width + padding * 2)
+                    y = y_offset + row * (thumb_height + padding * 3 + 20)
+                    
+                    # 在 Canvas 上创建图片
+                    img_id = canvas.create_image(x + thumb_width/2, y + thumb_height/2, image=photo)
+                    
+                    # 存储文件路径到图片 ID 的映射
+                    if not hasattr(canvas, 'img_path_map'):
+                        canvas.img_path_map = {}
+                    canvas.img_path_map[img_id] = filepath
+                    
+                    # 添加文件名文本
+                    filename = os.path.basename(filepath)
+                    if len(filename) > 15:
+                        filename = filename[:12] + '...'
+                    canvas.create_text(x + thumb_width/2, y + thumb_height + 10, 
+                                       text=filename, font=('Microsoft YaHei', 8),
+                                       fill='#2C3E50')
+                    
+                    col += 1
+                    if col >= columns:
+                        col = 0
+                        row += 1
+                        
+                except Exception as e:
+                    continue
+            
+            # 更新 Canvas 滚动区域
+            total_height = (row + 1) * (thumb_height + padding * 3 + 20) + padding
+            canvas.config(scrollregion=(0, 0, 200, total_height))
+        
+    def on_download_image_double_click(self, event):
+        """双击下载目录中的图片 - 在中间预览区域显示"""
+        canvas = event.widget
+        # 查找点击位置下的图片
+        items = canvas.find_overlapping(event.x, event.y, event.x, event.y)
+        img_map = getattr(canvas, 'img_path_map', {})
+        for item_id in items:
+            filepath = img_map.get(item_id)
+            if filepath and os.path.exists(filepath):
+                # 设置为当前图片文件
+                self.current_image_file = filepath
+                
+                # 在中间预览区域显示图片
+                if hasattr(self, 'preview_canvas') and self.preview_canvas:
+                    try:
+                        image = Image.open(filepath)
+                        
+                        canvas_widget = self.preview_canvas
+                        canvas_widget.update_idletasks()
+                        canvas_width = canvas_widget.winfo_width()
+                        canvas_height = canvas_widget.winfo_height()
+                        
+                        if canvas_width <= 1 or canvas_height <= 1:
+                            canvas_width = 400
+                            canvas_height = 500
+                        
+                        orig_width, orig_height = image.size
+                        ratio = min(canvas_width / orig_width, canvas_height / orig_height, 1.0)
+                        new_size = (int(orig_width * ratio), int(orig_height * ratio))
+                        
+                        image = image.resize(new_size, Image.Resampling.LANCZOS)
+                        self.preview_photo = ImageTk.PhotoImage(image)
+                        
+                        canvas_widget.delete("all")
+                        
+                        x_offset = (canvas_width - new_size[0]) // 2
+                        y_offset = (canvas_height - new_size[1]) // 2
+                        
+                        canvas_widget.create_image(x_offset, y_offset, anchor=tk.NW, image=self.preview_photo)
+                        
+                        # 绑定鼠标事件
+                        canvas_widget.bind("<Button-1>", lambda e: self.on_preview_click(e, canvas_widget, orig_width, orig_height, ratio, x_offset, y_offset))
+                        canvas_widget.bind("<B1-Motion>", lambda e: self.on_preview_drag(e, canvas_widget, orig_width, orig_height, ratio, x_offset, y_offset))
+                        canvas_widget.bind("<ButtonRelease-1>", self.on_preview_release)
+                        canvas_widget.bind("<Double-1>", lambda e: self.on_preview_double_click(e))
+                    except Exception as e:
+                        print(f"预览图片失败: {e}")
+                
+                # 尝试加载对应的JSON文件
+                if hasattr(self, 'silent_load_json'):
+                    self.silent_load_json(os.path.basename(filepath))
+                break
+    
+    def on_preview_double_click(self, event):
+        """双击预览区域 - 显示选中报纸的图片"""
+        # 检查是否有保存的原始报纸图片
+        if hasattr(self, 'original_image_file') and self.original_image_file and os.path.exists(self.original_image_file):
+            self.current_image_file = self.original_image_file
+            if hasattr(self, 'show_newspaper_image'):
+                self.show_newspaper_image()
+        elif hasattr(self, 'show_newspaper_image'):
+            # 如果没有原始图片，重新调用 show_newspaper_image
+            self.show_newspaper_image()
+    
+    def on_download_image_drag_start(self, event):
+        """开始拖动下载目录中的图片"""
+        canvas = event.widget
+        img_map = getattr(canvas, 'img_path_map', {})
+        
+        # 首先尝试 find_closest 获取最近的 item
+        closest_id = canvas.find_closest(event.x, event.y)
+        if closest_id and closest_id[0] in img_map:
+            filepath = img_map.get(closest_id[0])
+            if filepath and os.path.exists(filepath):
+                self.dragged_image_path = filepath
+                self._create_drag_window(filepath, event)
+                return
+        
+        # 如果最近的 item 不是图片，查找所有重叠的 items 中的图片
+        items = canvas.find_overlapping(event.x, event.y, event.x, event.y)
+        for item_id in items:
+            if item_id in img_map:
+                filepath = img_map.get(item_id)
+                if filepath and os.path.exists(filepath):
+                    self.dragged_image_path = filepath
+                    self._create_drag_window(filepath, event)
+                    return
+    
+    def _create_drag_window(self, filepath, event):
+        """创建拖动窗口显示缩略图"""
+        try:
+            img = Image.open(filepath)
+            img.thumbnail((80, 60), Image.LANCZOS)
+            self.dragged_photo = ImageTk.PhotoImage(img)
+            # 创建一个临时顶层窗口显示拖动的图片
+            self.drag_window = tk.Toplevel(self.root if hasattr(self, 'root') else None)
+            self.drag_window.overrideredirect(True)
+            self.drag_window.attributes('-topmost', True)
+            self.drag_label = tk.Label(self.drag_window, image=self.dragged_photo, bg='white', bd=2, relief=tk.SUNKEN)
+            self.drag_label.pack()
+            # 初始位置
+            self.drag_window.geometry(f'+{event.x_root}+{event.y_root}')
+        except Exception as e:
+            print(f"创建拖动图像失败: {e}")
+    
+    def on_download_image_drag(self, event):
+        """拖动图片 - 更新拖动窗口位置"""
+        if hasattr(self, 'drag_window') and self.drag_window:
+            self.drag_window.geometry(f'+{event.x_root}+{event.y_root}')
+    
+    def clear_news_pic_path(self, news_index, label_widget):
+        """清空指定新闻条目的图片路径"""
+        if news_index >= 0 and news_index < len(self.video_data):
+            # 清空视频数据中的图片路径
+            self.video_data[news_index]['news_pic'] = ''
+            # 更新标签显示
+            if label_widget:
+                label_widget.config(text="📷 未设置图片", fg='#3498DB')
+            # 显示提示
+            self.show_info("提示", "已清空图片路径")
+    
+    def highlight_front_pic(self):
+        """点击首页图片路径输入框时，在下载目录面板中高亮显示对应的图片"""
+        if hasattr(self, 'front_pic_entry') and self.front_pic_entry:
+            filepath = self.front_pic_entry.get().strip()
+            if filepath:
+                self.highlight_image_in_browser(filepath)
+
+    def highlight_front_pic(self):
+        """点击首页图片路径输入框时，在下载目录面板中高亮显示对应的图片"""
+        if hasattr(self, 'front_pic_entry') and self.front_pic_entry:
+            filepath = self.front_pic_entry.get().strip()
+            if filepath:
+                self.highlight_image_in_browser(filepath)
+
+    def highlight_image_in_browser(self, filepath, label_widget=None):
+        """在下载目录面板中高亮显示指定的图片"""
+        # 首先高亮标签作为反馈
+        if label_widget:
+            original_bg = label_widget.cget('bg')
+            original_fg = label_widget.cget('fg')
+            label_widget.config(bg='#2ECC71', fg='white')
+            
+            def restore_label():
+                try:
+                    label_widget.config(bg=original_bg, fg=original_fg)
+                except:
+                    pass
+            if hasattr(self, 'root') and self.root:
+                self.root.after(3000, restore_label)
+        
+        if not filepath:
+            return
+        
+        # 获取下载目录面板的 Canvas
+        canvas = None
+        if hasattr(self, 'main_app') and self.main_app:
+            if hasattr(self.main_app, 'download_images_canvas'):
+                canvas = self.main_app.download_images_canvas
+        
+        if not canvas:
+            return
+        
+        # 查找对应的图片并高亮
+        img_map = getattr(canvas, 'img_path_map', {})
+        found = False
+        for img_id, path in img_map.items():
+            if path == filepath:
+                found = True
+                # 获取图片坐标
+                coords = canvas.coords(img_id)
+                if coords and len(coords) >= 2:
+                    x, y = coords[0], coords[1]
+                    # 获取缩略图尺寸
+                    thumb_width = 210
+                    thumb_height = 158
+                    # 计算矩形边界
+                    x1 = x - thumb_width/2 - 5
+                    y1 = y - thumb_height/2 - 5
+                    x2 = x + thumb_width/2 + 5
+                    y2 = y + thumb_height/2 + 25
+                    
+                    # 创建高亮矩形
+                    highlight_id = canvas.create_rectangle(
+                        x1, y1, x2, y2,
+                        outline='#E74C3C',
+                        width=4,
+                        fill='#F1948A',
+                        stipple='gray25',
+                        tags=('highlight',)
+                    )
+                    
+                    # 滚动到图片位置
+                    bbox = canvas.bbox("all")
+                    if bbox:
+                        total_height = bbox[3] - bbox[1]
+                        canvas.yview_moveto(max(0, (y1 - 30) / total_height if total_height > 0 else 0))
+                    
+                    # 3秒后取消高亮
+                    def remove_highlight():
+                        try:
+                            canvas.delete(highlight_id)
+                        except:
+                            pass
+                    if hasattr(self, 'root') and self.root:
+                        self.root.after(3000, remove_highlight)
+                break
+        
+        # 如果没有找到，显示提示
+        if not found:
+            self.show_info("提示", f"未在下载目录中找到图片: {os.path.basename(filepath)}")
+    
+    def on_download_image_drag_end(self, event):
+        """结束拖动图片"""
+        if hasattr(self, 'dragged_image_path') and self.dragged_image_path:
+            # 首先检查是否拖到了首页图片路径输入框上
+            if hasattr(self, 'front_pic_entry') and self.front_pic_entry:
+                try:
+                    entry_x = self.front_pic_entry.winfo_rootx()
+                    entry_y = self.front_pic_entry.winfo_rooty()
+                    entry_width = self.front_pic_entry.winfo_width()
+                    entry_height = self.front_pic_entry.winfo_height()
+                    x, y = event.x_root, event.y_root
+                    
+                    if (entry_x <= x <= entry_x + entry_width and
+                        entry_y <= y <= entry_y + entry_height):
+                        # 设置首页图片路径
+                        self.front_pic_entry.delete(0, tk.END)
+                        self.front_pic_entry.insert(0, self.dragged_image_path)
+                        self.show_info("成功", f"已设置首页图片路径: {os.path.basename(self.dragged_image_path)}")
+                        
+                        # 关闭拖动窗口并清除状态
+                        if hasattr(self, 'drag_window') and self.drag_window:
+                            try:
+                                self.drag_window.destroy()
+                            except:
+                                pass
+                        self.dragged_image_path = None
+                        return
+                except Exception as e:
+                    print(f"检查首页图片输入框失败: {e}")
+            
+            # 然后检查是否拖到了新闻条目上
+            if hasattr(self, 'news_frame') and self.news_frame:
+                # 获取鼠标位置对应的新闻条目
+                x, y = event.x_root, event.y_root
+                
+                # 检查是否在新闻文本框区域内
+                for i, textbox_info in enumerate(self.news_textboxes):
+                    frame = textbox_info['frame']
+                    try:
+                        frame_x = frame.winfo_rootx()
+                        frame_y = frame.winfo_rooty()
+                        frame_width = frame.winfo_width()
+                        frame_height = frame.winfo_height()
+                        
+                        if (frame_x <= x <= frame_x + frame_width and
+                            frame_y <= y <= frame_y + frame_height):
+                            # 设置该新闻的图片路径
+                            self.video_data[i]['news_pic'] = self.dragged_image_path
+                            
+                            # 更新UI显示
+                            if 'news_pic_label' in textbox_info:
+                                textbox_info['news_pic_label'].config(text=f"📷 {os.path.basename(self.dragged_image_path)}")
+                            
+                            self.show_info("成功", f"已为新闻 {i+1} 设置图片: {os.path.basename(self.dragged_image_path)}")
+                            break
+                    except Exception as e:
+                        print(f"检查拖放目标失败: {e}")
+            
+            # 清除拖动状态
+            self.dragged_image_path = None
+            self.drag_start_index = -1
+            
+            # 关闭拖动窗口
+            if hasattr(self, 'drag_window') and self.drag_window:
+                try:
+                    self.drag_window.destroy()
+                except:
+                    pass
+                del self.drag_window

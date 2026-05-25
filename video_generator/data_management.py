@@ -6,8 +6,8 @@ import json
 import tkinter as tk
 from tkinter import filedialog
 class DataManager:
-    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
-        pass
+    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None, main_app=None):
+        self.main_app = main_app
     
     def silent_load_json(self, image_filename):
         """静默加载JSON文件（不显示提示框）"""
@@ -21,6 +21,8 @@ class DataManager:
             
             if os.path.exists(json_file_path):
                 self.current_image_file = os.path.join(self.download_dir, image_filename)
+                # 保存原始图片路径，用于双击预览区域恢复显示
+                self.original_image_file = self.current_image_file
                 self.load_json_file(json_file_path)
                 # 显示报纸图片
                 if hasattr(self, 'show_newspaper_image'):
@@ -46,6 +48,8 @@ class DataManager:
                     
                     if os.path.exists(json_file_path):
                         self.current_image_file = os.path.join(self.download_dir, image_filename)
+                        # 保存原始图片路径
+                        self.original_image_file = self.current_image_file
                         self.load_json_file(json_file_path)
                         # 显示报纸图片
                         if hasattr(self, 'show_newspaper_image'):
@@ -66,6 +70,8 @@ class DataManager:
                     image_filepath = os.path.join(self.download_dir, image_filename)
                     if os.path.exists(image_filepath):
                         self.current_image_file = image_filepath
+                        # 保存原始图片路径
+                        self.original_image_file = self.current_image_file
                     self.load_json_file(selected_file)
                     # 显示报纸图片
                     if hasattr(self, 'show_newspaper_image'):
@@ -89,8 +95,15 @@ class DataManager:
                         "id": i + 1,
                         "title": news.get('title', f"新闻{i+1}"),
                         "content": news.get('content', ""),
-                        "position": news.get('position', [0, 0, 0, 0])
+                        "position": news.get('position', [0, 0, 0, 0]),
+                        "news_pic": news.get('news_pic', '')
                     })
+            
+            # 提取首页图片路径
+            front_pic = data.get('front_pic', '')
+            if self.front_pic_entry:
+                self.front_pic_entry.delete(0, tk.END)
+                self.front_pic_entry.insert(0, front_pic)
             
             # 更新新闻列表
             if hasattr(self, 'update_news_list'):
@@ -129,7 +142,8 @@ class DataManager:
                             "id": i + 1,
                             "title": news.get('title', f"新闻{i+1}"),
                             "content": news.get('content', ""),
-                            "position": news.get('position', [0, 0, 0, 0])
+                            "position": news.get('position', [0, 0, 0, 0]),
+                            "news_pic": news.get('news_pic', '')
                         })
                 
                 # 更新新闻列表
@@ -177,6 +191,10 @@ class DataManager:
                         while content.endswith(',') or content.endswith('，'):
                             content = content[:-1].rstrip()
                         news['content'] = content
+                    
+                    # 确保news_pic字段存在（即使为空）
+                    if 'news_pic' not in news:
+                        news['news_pic'] = ''
                 print(f"[DEBUG save_video_data] 已处理新闻内容末尾逗号")
 
             # 检查并添加广告文本到最后一条新闻
@@ -214,6 +232,18 @@ class DataManager:
 
                     # 更新news_blocks
                     original_data['news_blocks'] = self.video_data
+                    
+                    # 更新front_pic字段
+                    front_pic = ''
+                    if self.front_pic_entry:
+                        front_pic = self.front_pic_entry.get().strip()
+                    original_data['front_pic'] = front_pic
+                    
+                    # 更新front_pic字段
+                    front_pic = ''
+                    if self.front_pic_entry:
+                        front_pic = self.front_pic_entry.get().strip()
+                    original_data['front_pic'] = front_pic
 
                     # 保存回原始JSON文件
                     with open(json_file, 'w', encoding='utf-8') as f:
@@ -260,8 +290,16 @@ class DataManager:
             # 如果仍然没有保存成功，保存为video_data.json
             if not saved:
                 video_data_file = os.path.join(self.analysis_dir, "video_data.json")
+                # 准备完整的数据结构
+                front_pic = ''
+                if self.front_pic_entry:
+                    front_pic = self.front_pic_entry.get().strip()
+                full_data = {
+                    'news_blocks': self.video_data,
+                    'front_pic': front_pic
+                }
                 with open(video_data_file, 'w', encoding='utf-8') as f:
-                    json.dump(self.video_data, f, ensure_ascii=False, indent=2)
+                    json.dump(full_data, f, ensure_ascii=False, indent=2)
                 saved = True
                 saved_path = video_data_file
                 print(f"[DEBUG save_video_data] 保存成功到video_data.json")

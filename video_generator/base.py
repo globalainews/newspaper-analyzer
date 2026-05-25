@@ -7,17 +7,20 @@ import tkinter as tk
 from tkinter import messagebox
 
 class VideoGeneratorBase:
-    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
+    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None, main_app=None):
         self.config = config
         self.progress_label = progress_label_widget
         self.progress_bar = progress_bar_widget
         self.root = root
+        self.main_app = main_app
         
         self.video_data = []
         self.current_news_index = -1
         self.analysis_dir = self.config.get('analysis_settings', {}).get('analysis_directory', 'analysis_results')
         self.download_dir = self.config['download_settings']['save_directory']
         self.current_image_file = None
+        self.original_image_file = None  # 保存原始报纸图片路径，用于双击预览区域恢复显示
+        self.front_pic_entry = None  # 首页图片路径输入框
         # 剪映草稿文件夹配置
         self.jianying_drafts_dir = self.config.get('jianying_settings', {}).get('drafts_directory', 'E:/剪映5.9/JianyingPro Drafts')
     

@@ -1,6 +1,7 @@
 import os
 import json
 import shutil
+import datetime
 
 
 def load_config(config_file='config.json'):
@@ -84,6 +85,9 @@ def refresh_image_list(download_dir, sort_by='date'):
     Returns:
         排序后的图片文件列表（倒序）
     """
+    # 从下载目录查找今天最新的报纸文件并复制到项目目录
+    copy_todays_newspaper()
+    
     image_files = []
     if os.path.exists(download_dir):
         image_files = [f for f in os.listdir(download_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
@@ -94,3 +98,58 @@ def refresh_image_list(download_dir, sort_by='date'):
             # 按文件名倒序
             image_files = sorted(image_files, key=lambda f: f.lower(), reverse=True)
     return image_files
+
+
+def copy_todays_newspaper():
+    """从下载目录查找今天最新的报纸文件并复制到项目的downloaded_images目录"""
+    import shutil
+    
+    # 下载目录
+    downloads_dir = r'F:\Administrator\Downloads'
+    # 目标目录
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    target_dir = os.path.join(project_dir, 'downloaded_images')
+    
+    # 确保目标目录存在
+    os.makedirs(target_dir, exist_ok=True)
+    
+    if not os.path.exists(downloads_dir):
+        print(f"[DEBUG] 下载目录不存在: {downloads_dir}")
+        return
+    
+    # 获取今天日期（YYYYMMDD格式）
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    
+    # 查找今天的报纸文件（WSJ或FT开头 + 日期 + .jpg）
+    today_files = []
+    for f in os.listdir(downloads_dir):
+        if f.lower().endswith('.jpg'):
+            # 检查文件名是否符合格式：WSJ/FT + 日期
+            upper_name = f.upper()
+            if (upper_name.startswith('WSJ') or upper_name.startswith('FT')) and today in upper_name:
+                today_files.append(f)
+    
+    if not today_files:
+        print(f"[DEBUG] 未找到今天({today})的报纸文件")
+        return
+    
+    # 按修改时间排序，取最新的
+    today_files = sorted(today_files, key=lambda f: os.path.getmtime(os.path.join(downloads_dir, f)), reverse=True)
+    latest_file = today_files[0]
+    source_path = os.path.join(downloads_dir, latest_file)
+    target_path = os.path.join(target_dir, latest_file)
+    
+    # 检查是否需要复制
+    if os.path.exists(target_path):
+        source_mtime = os.path.getmtime(source_path)
+        target_mtime = os.path.getmtime(target_path)
+        if source_mtime <= target_mtime:
+            print(f"[DEBUG] 目标文件已是最新版本，无需复制: {latest_file}")
+            return
+    
+    # 复制文件
+    try:
+        shutil.copy2(source_path, target_path)
+        print(f"[DEBUG] 已复制报纸文件: {latest_file} -> {target_dir}")
+    except Exception as e:
+        print(f"[ERROR] 复制文件失败: {str(e)}")

@@ -14,11 +14,14 @@ from .jianying_draft import JianyingDraftManager
 from .timing_sync import TimingSynchronizer
 
 class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, JianyingDraftManager, TimingSynchronizer):
-    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
+    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None, main_app=None):
         # 调用所有父类的初始化
-        VideoGeneratorBase.__init__(self, config, progress_label_widget, progress_bar_widget, root)
-        UIHelpers.__init__(self, config, progress_label_widget, progress_bar_widget, root)
-        TimingSynchronizer.__init__(self, config, progress_label_widget, progress_bar_widget, root)
+        VideoGeneratorBase.__init__(self, config, progress_label_widget, progress_bar_widget, root, main_app)
+        DataManager.__init__(self, config, progress_label_widget, progress_bar_widget, root, main_app)
+        UIHelpers.__init__(self, config, progress_label_widget, progress_bar_widget, root, main_app)
+        VideoCreator.__init__(self, config, progress_label_widget, progress_bar_widget, root, main_app)
+        JianyingDraftManager.__init__(self, config, progress_label_widget, progress_bar_widget, root, main_app)
+        TimingSynchronizer.__init__(self, config, progress_label_widget, progress_bar_widget, root, main_app)
     
     def edit_news_inline(self, event):
         """行内编辑新闻（双击编辑）"""
@@ -247,11 +250,6 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                 self.show_warning("警告", "请先选择报纸图片")
                 return
 
-            # 加载原始图片
-            from PIL import Image
-            pil_image = Image.open(self.current_image_file)
-            orig_width, orig_height = pil_image.size
-
             # 获取草稿目录路径
             image_filename = os.path.basename(self.current_image_file)
             base_name = os.path.splitext(image_filename)[0]
@@ -263,48 +261,112 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
             # 创建Resources目录
             os.makedirs(resources_dir, exist_ok=True)
 
+            # 检查是否有新闻条目设置了图片路径或首页图片路径
+            has_news_pic = any(news.get('news_pic', '') for news in self.video_data)
+            has_front_pic = False
+            if hasattr(self, 'front_pic_entry') and self.front_pic_entry:
+                front_pic_path = self.front_pic_entry.get().strip()
+                has_front_pic = front_pic_path and os.path.exists(front_pic_path)
+            
+            # 如果有新闻条目设置了图片路径或首页图片路径，先备份原有文件
+            if has_news_pic or has_front_pic:
+                bak_dir = os.path.join(resources_dir, 'bak')
+                os.makedirs(bak_dir, exist_ok=True)
+                
+                # 备份P?.jpg文件
+                import glob
+                for p_file in glob.glob(os.path.join(resources_dir, 'P?.jpg')):
+                    if os.path.exists(p_file):
+                        import shutil
+                        bak_path = os.path.join(bak_dir, os.path.basename(p_file))
+                        shutil.copy2(p_file, bak_path)
+                        print(f"备份文件: {p_file} -> {bak_path}")
+                
+                # 备份front.png文件
+                front_png = os.path.join(resources_dir, 'front.png')
+                if os.path.exists(front_png):
+                    import shutil
+                    bak_path = os.path.join(bak_dir, 'front.png')
+                    shutil.copy2(front_png, bak_path)
+                    print(f"备份文件: {front_png} -> {bak_path}")
+
             # 保存每张截图的实际尺寸
             screenshot_sizes = {}
 
-            # 遍历所有新闻，截取对应的区域
+            # 首先处理首页图片
+            if has_front_pic:
+                import shutil
+                front_pic_path = self.front_pic_entry.get().strip()
+                front_png_path = os.path.join(resources_dir, 'front.png')
+                
+                # 复制首页图片为 front.png
+                shutil.copy2(front_pic_path, front_png_path)
+                print(f"复制首页图片: {front_pic_path} -> {front_png_path}")
+
+            # 遍历所有新闻，处理图片
             screenshot_count = 0
             for i, news in enumerate(self.video_data):
-                position = news.get('position', [0, 0, 0, 0])
-                if len(position) != 4:
-                    print(f"新闻 {i+1}: 无有效位置信息，跳过")
-                    continue
-
-                x1, y1, x2, y2 = position
-
-                # 确保坐标有效
-                x1 = max(0, int(x1))
-                y1 = max(0, int(y1))
-                x2 = min(orig_width, int(x2))
-                y2 = min(orig_height, int(y2))
-
-                if x2 <= x1 or y2 <= y1:
-                    print(f"新闻 {i+1}: 无效坐标 ({x1},{y1},{x2},{y2})，跳过")
-                    continue
-
-                # 裁剪图片
-                cropped = pil_image.crop((x1, y1, x2, y2))
+                news_pic_path = news.get('news_pic', '').strip()
                 
-                # 记录实际尺寸
-                actual_width, actual_height = cropped.size
-                screenshot_sizes[f"P{i+1}.jpg"] = {'width': actual_width, 'height': actual_height}
+                if news_pic_path and os.path.exists(news_pic_path):
+                    # 如果新闻条目设置了图片路径，直接复制该图片到P?.jpg
+                    import shutil
+                    screenshot_filename = f"P{i+1}.jpg"
+                    screenshot_path = os.path.join(resources_dir, screenshot_filename)
+                    
+                    shutil.copy2(news_pic_path, screenshot_path)
+                    
+                    # 获取图片尺寸
+                    from PIL import Image
+                    with Image.open(screenshot_path) as img:
+                        actual_width, actual_height = img.size
+                    
+                    screenshot_sizes[screenshot_filename] = {'width': actual_width, 'height': actual_height}
+                    screenshot_count += 1
+                    print(f"复制图片: {news_pic_path} -> {screenshot_path} (尺寸: {actual_width}x{actual_height})")
+                else:
+                    # 否则执行现有的截图操作
+                    position = news.get('position', [0, 0, 0, 0])
+                    if len(position) != 4:
+                        print(f"新闻 {i+1}: 无有效位置信息且未设置图片路径，跳过")
+                        continue
 
-                # 保存图片，命名格式：P1.jpg, P2.jpg, ...
-                screenshot_filename = f"P{i+1}.jpg"
-                screenshot_path = os.path.join(resources_dir, screenshot_filename)
+                    # 加载原始图片（按需加载）
+                    from PIL import Image
+                    pil_image = Image.open(self.current_image_file)
+                    orig_width, orig_height = pil_image.size
 
-                # JPEG不支持RGBA，需要转换
-                if cropped.mode == 'RGBA':
-                    cropped = cropped.convert('RGB')
+                    x1, y1, x2, y2 = position
 
-                # 保存为JPEG格式
-                cropped.save(screenshot_path, 'JPEG', quality=95)
-                screenshot_count += 1
-                print(f"保存截图: {screenshot_path} (尺寸: {actual_width}x{actual_height})")
+                    # 确保坐标有效
+                    x1 = max(0, int(x1))
+                    y1 = max(0, int(y1))
+                    x2 = min(orig_width, int(x2))
+                    y2 = min(orig_height, int(y2))
+
+                    if x2 <= x1 or y2 <= y1:
+                        print(f"新闻 {i+1}: 无效坐标 ({x1},{y1},{x2},{y2})，跳过")
+                        continue
+
+                    # 裁剪图片
+                    cropped = pil_image.crop((x1, y1, x2, y2))
+                    
+                    # 记录实际尺寸
+                    actual_width, actual_height = cropped.size
+                    screenshot_sizes[f"P{i+1}.jpg"] = {'width': actual_width, 'height': actual_height}
+
+                    # 保存图片，命名格式：P1.jpg, P2.jpg, ...
+                    screenshot_filename = f"P{i+1}.jpg"
+                    screenshot_path = os.path.join(resources_dir, screenshot_filename)
+
+                    # JPEG不支持RGBA，需要转换
+                    if cropped.mode == 'RGBA':
+                        cropped = cropped.convert('RGB')
+
+                    # 保存为JPEG格式
+                    cropped.save(screenshot_path, 'JPEG', quality=95)
+                    screenshot_count += 1
+                    print(f"保存截图: {screenshot_path} (尺寸: {actual_width}x{actual_height})")
 
             if screenshot_count > 0:
                 # 更新草稿素材的宽高

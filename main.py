@@ -49,10 +49,12 @@ class EnhancedKioskoDownloader:
             self.config,
             self.progress_label,
             self.progress_bar,
-            self.root
+            self.root,
+            self  # 传入 main_app 引用
         )
         self.video_generator.set_news_listbox(self.news_frame)
         self.video_generator.preview_canvas = self.video_preview_canvas
+        self.video_generator.front_pic_entry = self.front_pic_entry
         
         gemini_status = "✅ Gemini已连接" if self.analyzer.gemini_available else "❌ Gemini未配置"
         status_color = "#27AE60" if self.analyzer.gemini_available else "#E74C3C"
@@ -416,6 +418,14 @@ class EnhancedKioskoDownloader:
                                command=lambda: self.video_generator.generate_jianying_draft() if self.video_generator else None)
         jianying_btn.pack(fill=tk.X, padx=5, pady=2)
         
+        # 截图按钮（放在同步时序之前）
+        screenshot_btn = tk.Button(btn_frame, text="📷\n截图",
+                            font=("Microsoft YaHei", 9), bg='#16A085', fg='white',
+                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                            wraplength=80,
+                            command=lambda: self.video_generator.capture_news_screenshots() if self.video_generator else None)
+        screenshot_btn.pack(fill=tk.X, padx=5, pady=2)
+
         sync_btn = tk.Button(btn_frame, text="⏱️\n同步时序",
                            font=("Microsoft YaHei", 9), bg='#9B59B6', fg='white',
                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
@@ -423,12 +433,9 @@ class EnhancedKioskoDownloader:
                            command=lambda: self.video_generator.process_jianying_draft_timing() if self.video_generator else None)
         sync_btn.pack(fill=tk.X, padx=5, pady=2)
 
-        screenshot_btn = tk.Button(btn_frame, text="📷\n截图",
-                            font=("Microsoft YaHei", 9), bg='#16A085', fg='white',
-                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
-                            wraplength=80,
-                            command=lambda: self.video_generator.capture_news_screenshots() if self.video_generator else None)
-        screenshot_btn.pack(fill=tk.X, padx=5, pady=2)
+        # 添加空白间隔，区分按钮区域
+        spacer = tk.Label(btn_frame, text="", height=2)
+        spacer.pack(fill=tk.X, padx=5)
 
         perfect_rect_btn = tk.Button(btn_frame, text="📐\n完美矩形",
                             font=("Microsoft YaHei", 9), bg='#1ABC9C', fg='white',
@@ -523,15 +530,26 @@ class EnhancedKioskoDownloader:
                              command=lambda: self.video_generator.delete_news() if self.video_generator else None)
         delete_btn.pack(side=tk.RIGHT)
 
-        right_frame = tk.Frame(main_paned, width=400)
-        main_paned.add(right_frame, minsize=300)
+        right_frame = tk.Frame(main_paned, width=600)
+        main_paned.add(right_frame, minsize=450)
         
-        preview_title = tk.Frame(right_frame, bg='#2C3E50')
+        # 右侧内容区使用grid布局，图片预览:下载目录 = 2:1
+        right_content = tk.Frame(right_frame)
+        right_content.pack(fill=tk.BOTH, expand=True)
+        right_content.grid_columnconfigure(0, weight=2)
+        right_content.grid_columnconfigure(1, weight=1)
+        right_content.grid_rowconfigure(0, weight=1)
+        
+        # 左边：图片预览
+        preview_panel = tk.Frame(right_content)
+        preview_panel.grid(row=0, column=0, sticky='nsew', padx=(5, 2), pady=5)
+        
+        preview_title = tk.Frame(preview_panel, bg='#2C3E50')
         preview_title.pack(fill=tk.X)
         tk.Label(preview_title, text="🖼️ 图片预览", font=("Microsoft YaHei", 12, "bold"), 
                 bg='#2C3E50', fg='white').pack(pady=8)
         
-        preview_canvas_frame = tk.Frame(right_frame, bg='#BDC3C7', relief=tk.SUNKEN, bd=1)
+        preview_canvas_frame = tk.Frame(preview_panel, bg='#BDC3C7', relief=tk.SUNKEN, bd=1)
         preview_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
         self.video_preview_canvas = tk.Canvas(preview_canvas_frame, bg='white', highlightthickness=0)
@@ -541,6 +559,62 @@ class EnhancedKioskoDownloader:
             200, 200, text="选择新闻条目查看预览", 
             font=("Microsoft YaHei", 12), fill='#95A5A6'
         )
+        
+        # 预览区域下方：首页图片路径输入框
+        front_pic_frame = tk.Frame(preview_panel, bg='#ECF0F1')
+        front_pic_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Label(front_pic_frame, text="📷 首页图片路径:", 
+                font=("Microsoft YaHei", 9), bg='#ECF0F1').pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.front_pic_entry = tk.Entry(front_pic_frame, font=("Microsoft YaHei", 9))
+        self.front_pic_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        # 绑定点击事件，在下载目录面板中高亮显示对应的图片
+        self.front_pic_entry.bind('<Button-1>', lambda e: self.video_generator.highlight_front_pic() if self.video_generator else None)
+        # 绑定点击事件，在下载目录面板中高亮显示对应的图片
+        self.front_pic_entry.bind('<Button-1>', lambda e: self.video_generator.highlight_front_pic() if self.video_generator else None)
+        
+        # 右边：下载目录图片浏览器
+        image_browser_panel = tk.Frame(right_content)
+        image_browser_panel.grid(row=0, column=1, sticky='nsew', padx=(2, 5), pady=5)
+        
+        browser_title = tk.Frame(image_browser_panel, bg='#34495E')
+        browser_title.pack(fill=tk.X)
+        tk.Label(browser_title, text="📁 下载目录图片", font=("Microsoft YaHei", 10, "bold"), 
+                bg='#34495E', fg='white').pack(pady=6)
+        
+        browser_container = tk.Frame(image_browser_panel, bg='#ECF0F1')
+        browser_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # 图片缩略图滚动区域（使用 Canvas）
+        self.download_images_canvas = tk.Canvas(browser_container,
+                                                bg='#ECF0F1',
+                                                highlightthickness=0)
+        self.download_images_scroll_y = tk.Scrollbar(browser_container, orient=tk.VERTICAL)
+        self.download_images_scroll_y.config(command=self.download_images_canvas.yview)
+        self.download_images_canvas.config(yscrollcommand=self.download_images_scroll_y.set)
+        
+        self.download_images_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.download_images_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # 缩略图存储
+        self.download_thumbnails = []
+        self.download_thumbnail_images = {}  # filepath -> PhotoImage
+        
+        # 绑定 Canvas 事件
+        self.download_images_canvas.bind('<Double-1>', lambda e: self.video_generator.on_download_image_double_click(e) if self.video_generator else None)
+        self.download_images_canvas.bind('<ButtonPress-1>', lambda e: self.video_generator.on_download_image_drag_start(e) if self.video_generator else None)
+        self.download_images_canvas.bind('<B1-Motion>', lambda e: self.video_generator.on_download_image_drag(e) if self.video_generator else None)
+        self.download_images_canvas.bind('<ButtonRelease-1>', lambda e: self.video_generator.on_download_image_drag_end(e) if self.video_generator else None)
+        
+        # 刷新按钮
+        refresh_browser_btn = tk.Button(image_browser_panel, text="🔄 刷新",
+                                       font=("Microsoft YaHei", 9),
+                                       bg='#3498DB', fg='white',
+                                       relief=tk.FLAT, padx=8, pady=2,
+                                       cursor='hand2',
+                                       command=lambda: self.video_generator.refresh_download_images() if self.video_generator else None)
+        refresh_browser_btn.pack(fill=tk.X, padx=5, pady=2)
         
         progress_frame = tk.Frame(right_frame, bg='#ECF0F1')
         progress_frame.pack(fill=tk.X, padx=10, pady=(0, 5))

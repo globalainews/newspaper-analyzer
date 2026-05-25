@@ -18,8 +18,8 @@ except ImportError:
 
 
 class JianyingDraftManager:
-    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None):
-        pass
+    def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None, main_app=None):
+        self.main_app = main_app
 
     def load_cosyvoice_model(self):
         """加载CosyVoice模型"""
