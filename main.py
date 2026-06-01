@@ -246,7 +246,7 @@ class EnhancedKioskoDownloader:
         
         actions = [
             ("🔄 刷新", '#3498DB', self.on_refresh_list),
-            ("📊 分析", '#9B59B6', self.on_analyze_click),
+            (" 分析", '#9B59B6', self.on_analyze_click),
             ("🌐 Gemini", '#E67E22', self.on_open_gemini),
             ("💾 保存图片", '#27AE60', self.on_download_image),
         ]
@@ -464,7 +464,15 @@ class EnhancedKioskoDownloader:
                             wraplength=80,
                             command=lambda: self.video_generator.test_voice_clone() if self.video_generator else None)
         test_voice_btn.pack(fill=tk.X, padx=5, pady=2)
-
+        
+        # 首页Prompt按钮
+        prompt_btn = tk.Button(btn_frame, text="✏️\n首页Prompt",
+                            font=("Microsoft YaHei", 9), bg='#9B59B6', fg='white',
+                            relief=tk.FLAT, padx=5, pady=5, cursor='hand2',
+                            wraplength=80,
+                            command=lambda: self.video_generator.generate_prompt() if self.video_generator else None)
+        prompt_btn.pack(fill=tk.X, padx=5, pady=2)
+        
         main_paned = tk.PanedWindow(video_container, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=4)
         main_paned.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
@@ -607,14 +615,29 @@ class EnhancedKioskoDownloader:
         self.download_images_canvas.bind('<B1-Motion>', lambda e: self.video_generator.on_download_image_drag(e) if self.video_generator else None)
         self.download_images_canvas.bind('<ButtonRelease-1>', lambda e: self.video_generator.on_download_image_drag_end(e) if self.video_generator else None)
         
+        # 按钮区域框架
+        btn_frame = tk.Frame(image_browser_panel, bg='#ECF0F1')
+        btn_frame.pack(fill=tk.X, padx=5, pady=2)
+        
         # 刷新按钮
-        refresh_browser_btn = tk.Button(image_browser_panel, text="🔄 刷新",
-                                       font=("Microsoft YaHei", 9),
+        refresh_browser_btn = tk.Button(btn_frame, text="🔄 刷新",
+                                       font=("Microsoft YaHei", 8),
                                        bg='#3498DB', fg='white',
-                                       relief=tk.FLAT, padx=8, pady=2,
+                                       relief=tk.FLAT, padx=4, pady=1,
                                        cursor='hand2',
-                                       command=lambda: self.video_generator.refresh_download_images() if self.video_generator else None)
-        refresh_browser_btn.pack(fill=tk.X, padx=5, pady=2)
+                                       width=8,
+                                       command=lambda: self.video_generator.reset_to_today() if self.video_generator else None)
+        refresh_browser_btn.pack(side=tk.LEFT, padx=2)
+        
+        # 前一天按钮
+        prev_day_btn = tk.Button(btn_frame, text="◀ 前一天",
+                                font=("Microsoft YaHei", 8),
+                                bg='#9B59B6', fg='white',
+                                relief=tk.FLAT, padx=4, pady=1,
+                                cursor='hand2',
+                                width=8,
+                                command=lambda: self.video_generator.previous_day_images() if self.video_generator else None)
+        prev_day_btn.pack(side=tk.LEFT, padx=2)
         
         progress_frame = tk.Frame(right_frame, bg='#ECF0F1')
         progress_frame.pack(fill=tk.X, padx=10, pady=(0, 5))

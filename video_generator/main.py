@@ -12,6 +12,7 @@ from .ui_helpers import UIHelpers
 from .video_creation import VideoCreator
 from .jianying_draft import JianyingDraftManager
 from .timing_sync import TimingSynchronizer
+from .image_processor import process_screenshot
 
 class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, JianyingDraftManager, TimingSynchronizer):
     def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None, main_app=None):
@@ -145,6 +146,133 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
         else:
             self.show_info("提示", "已经是最后一条新闻")
 
+    def generate_prompt(self):
+        """生成首页Prompt并弹出编辑窗口"""
+        # 提取新闻短标题
+        short_titles = []
+        for news in self.video_data:
+            title = news.get('title', '').strip()
+            if title:
+                # 截取前30个字符作为短标题
+                short_title = title[:30] + '...' if len(title) > 30 else title
+                short_titles.append(short_title)
+        
+        # 获取报纸名称
+        newspaper_name = "未知报纸"
+        if hasattr(self, 'current_image_file') and self.current_image_file:
+            filename = os.path.basename(self.current_image_file)
+            # 尝试从文件名提取报纸名称
+            if 'WSJ' in filename:
+                newspaper_name = "华尔街日报"
+            elif 'FT' in filename:
+                newspaper_name = "金融时报"
+        
+        # 构建Prompt模板
+        prompt_template = f"大标题：{newspaper_name}\n"
+        
+        # 添加短标题
+        for i, title in enumerate(short_titles[:4], 1):
+            prompt_template += f"短标题{i}：{title}\n"
+        
+        # 添加风格描述
+        prompt_template += """
+一款专业的短视频封面布局，3:4的比例，采用复古报纸评论风格。构图中心是一个手绘讽刺漫画板，具有粗犷的墨水轮廓和有限的配色（经典新闻纸奶油色、黑色墨水和点缀的红色）。漫画周围环绕着醒目且具有冲击力的新闻标题，使用优雅的衬线字体。纹理包含半色调网点、细微的纸张褶皱和墨水晕染效果。整体氛围尖锐、具有分析性且风趣，让人联想起经典的政治杂志封面。高对比度，适合社交媒体显示的简洁布局。画面中尽量不用文字，如果用要用中文。
+"""
+        
+        # 读取已保存的Prompt（如果存在）
+        existing_prompt = ''
+        json_file = ''
+        if self.current_image_file and os.path.exists(self.current_image_file):
+            base_name = os.path.splitext(os.path.basename(self.current_image_file))[0]
+            json_file = os.path.join(self.analysis_dir, f"{base_name}.json")
+        
+        if json_file and os.path.exists(json_file):
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    existing_prompt = data.get('prompt', '')
+            except:
+                pass
+        
+        # 使用已保存的Prompt或新生成的
+        initial_text = existing_prompt if existing_prompt else prompt_template
+        
+        # 创建弹出窗口
+        prompt_window = tk.Toplevel(self.root)
+        prompt_window.title("首页Prompt")
+        prompt_window.geometry("700x500")
+        prompt_window.resizable(True, True)
+        
+        # 添加按钮区域（移到顶部）
+        btn_frame = tk.Frame(prompt_window, padx=10, pady=5)
+        btn_frame.pack(fill=tk.X)
+        
+        def save_prompt():
+            """保存Prompt到JSON文件"""
+            prompt_text = text_widget.get(1.0, tk.END).strip()
+            
+            if os.path.exists(json_file):
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            else:
+                data = {}
+            
+            data['prompt'] = prompt_text
+            
+            with open(json_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            
+            self.show_info("成功", "Prompt已保存!")
+            prompt_window.destroy()
+        
+        def regenerate_prompt():
+            """重新生成Prompt"""
+            text_widget.delete(1.0, tk.END)
+            text_widget.insert(tk.END, prompt_template)
+        
+        def copy_prompt():
+            """复制Prompt内容到剪贴板"""
+            prompt_text = text_widget.get(1.0, tk.END).strip()
+            prompt_window.clipboard_clear()
+            prompt_window.clipboard_append(prompt_text)
+            prompt_window.update()  # 确保剪贴板更新
+        
+        copy_btn = tk.Button(btn_frame, text="📋 复制",
+                             font=("Microsoft YaHei", 9), bg='#E67E22', fg='white',
+                             relief=tk.FLAT, padx=10, pady=3,
+                             command=copy_prompt)
+        copy_btn.pack(side=tk.LEFT, padx=5)
+        
+        regenerate_btn = tk.Button(btn_frame, text="🔄 重新生成",
+                                   font=("Microsoft YaHei", 9), bg='#3498DB', fg='white',
+                                   relief=tk.FLAT, padx=10, pady=3,
+                                   command=regenerate_prompt)
+        regenerate_btn.pack(side=tk.LEFT, padx=5)
+        
+        save_btn = tk.Button(btn_frame, text="💾 保存",
+                             font=("Microsoft YaHei", 9), bg='#27AE60', fg='white',
+                             relief=tk.FLAT, padx=10, pady=3,
+                             command=save_prompt)
+        save_btn.pack(side=tk.LEFT, padx=5)
+        
+        cancel_btn = tk.Button(btn_frame, text="❌ 取消",
+                               font=("Microsoft YaHei", 9), bg='#95A5A6', fg='white',
+                               relief=tk.FLAT, padx=10, pady=3,
+                               command=prompt_window.destroy)
+        cancel_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 添加文本编辑区域
+        text_frame = tk.Frame(prompt_window, padx=10, pady=5)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+        
+        text_label = tk.Label(text_frame, text="Prompt内容：", font=("Microsoft YaHei", 10))
+        text_label.pack(anchor=tk.W)
+        
+        text_widget = tk.Text(text_frame, font=("Microsoft YaHei", 10), wrap=tk.WORD)
+        text_widget.pack(fill=tk.BOTH, expand=True, pady=5)
+        text_widget.insert(tk.END, initial_text)
+        text_widget.focus_set()
+    
     def test_voice_clone(self):
         """测试音色克隆，生成10个不同seed的测试音频"""
         import threading
@@ -351,7 +479,10 @@ class VideoGenerator(VideoGeneratorBase, DataManager, UIHelpers, VideoCreator, J
                     # 裁剪图片
                     cropped = pil_image.crop((x1, y1, x2, y2))
                     
-                    # 记录实际尺寸
+                    # 图片增强处理：扩展到3:4比例 + 文字清晰化
+                    cropped = process_screenshot(cropped, target_ratio=(3, 4), sharpness=1.5, contrast=1.2)
+                    
+                    # 记录实际尺寸（处理后的尺寸）
                     actual_width, actual_height = cropped.size
                     screenshot_sizes[f"P{i+1}.jpg"] = {'width': actual_width, 'height': actual_height}
 

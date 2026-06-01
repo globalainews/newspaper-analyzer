@@ -19,6 +19,8 @@ class UIHelpers:
         self.progress_label = None
         self.progress_bar_widget = None
         self.main_app = main_app
+        # 日期浏览偏移量（0=今天，-1=前一天，-2=前两天）
+        self.date_offset = 0
     
     def show_fullscreen_progress(self, title, message, progress=0):
         """显示在当前窗口中间的进度层
@@ -969,6 +971,16 @@ class UIHelpers:
         x1, y1, x2, y2 = bbox
         return x1 <= x <= x2 and y1 <= y <= y2
     
+    def previous_day_images(self):
+        """显示前一天的图片"""
+        self.date_offset -= 1
+        self.refresh_download_images()
+    
+    def reset_to_today(self):
+        """重置为显示今天的图片"""
+        self.date_offset = 0
+        self.refresh_download_images()
+    
     def refresh_download_images(self):
         """刷新下载目录图片列表，显示缩略图"""
         download_dir = r'F:\Administrator\Downloads'
@@ -997,24 +1009,26 @@ class UIHelpers:
         
         # 获取今天的日期
         today = datetime.datetime.now().date()
+        # 根据偏移量计算目标日期
+        target_date = today + datetime.timedelta(days=self.date_offset)
         
-        # 查找下载目录中的图片文件（只显示今天的）
+        # 查找下载目录中的图片文件
         if os.path.exists(download_dir):
             image_files = []
             for ext in ['*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp']:
                 image_files.extend(glob.glob(os.path.join(download_dir, ext)))
             
-            # 过滤只保留今天的图片
-            today_image_files = []
+            # 过滤只保留目标日期的图片
+            filtered_image_files = []
             for filepath in image_files:
                 try:
                     file_mtime = datetime.datetime.fromtimestamp(os.path.getmtime(filepath)).date()
-                    if file_mtime == today:
-                        today_image_files.append(filepath)
+                    if file_mtime == target_date:
+                        filtered_image_files.append(filepath)
                 except:
                     continue
             
-            image_files = today_image_files
+            image_files = filtered_image_files
             
             # 按修改时间倒序排列
             image_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
