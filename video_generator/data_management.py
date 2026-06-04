@@ -9,6 +9,36 @@ class DataManager:
     def __init__(self, config, progress_label_widget=None, progress_bar_widget=None, root=None, main_app=None):
         self.main_app = main_app
     
+    def generate_video_description_from_titles(self, original_description=''):
+        """根据新闻标题生成video_description内容，替换最后一行为标题列表"""
+        if not self.video_data:
+            return original_description
+        
+        # 提取所有新闻标题
+        titles = []
+        for news in self.video_data:
+            title = news.get('title', '').strip()
+            if title:
+                titles.append(title)
+        
+        if not titles:
+            return original_description
+        
+        # 用标题生成新内容，逗号隔开
+        titles_text = '，'.join(titles)
+        
+        # 如果原描述存在，按行分割处理
+        if original_description:
+            lines = original_description.split('\n')
+            if len(lines) >= 2:
+                # 保留前几行，只替换最后一行
+                lines[-1] = f" {titles_text}"
+                return '\n'.join(lines)
+            else:
+                return original_description + '\n' + titles_text
+        else:
+            return titles_text
+    
     def silent_load_json(self, image_filename):
         """静默加载JSON文件（不显示提示框）"""
         try:
@@ -239,11 +269,10 @@ class DataManager:
                         front_pic = self.front_pic_entry.get().strip()
                     original_data['front_pic'] = front_pic
                     
-                    # 更新front_pic字段
-                    front_pic = ''
-                    if self.front_pic_entry:
-                        front_pic = self.front_pic_entry.get().strip()
-                    original_data['front_pic'] = front_pic
+                    # 更新video_description字段，根据新闻标题生成
+                    video_description = original_data.get('video_description', '')
+                    new_video_description = self.generate_video_description_from_titles(video_description)
+                    original_data['video_description'] = new_video_description
 
                     # 保存回原始JSON文件
                     with open(json_file, 'w', encoding='utf-8') as f:
@@ -278,6 +307,17 @@ class DataManager:
 
                     # 更新news_blocks
                     original_data['news_blocks'] = self.video_data
+                    
+                    # 更新front_pic字段
+                    front_pic = ''
+                    if self.front_pic_entry:
+                        front_pic = self.front_pic_entry.get().strip()
+                    original_data['front_pic'] = front_pic
+                    
+                    # 更新video_description字段，根据新闻标题生成
+                    video_description = original_data.get('video_description', '')
+                    new_video_description = self.generate_video_description_from_titles(video_description)
+                    original_data['video_description'] = new_video_description
 
                     # 保存回原始JSON文件
                     with open(latest_json, 'w', encoding='utf-8') as f:
@@ -294,9 +334,12 @@ class DataManager:
                 front_pic = ''
                 if self.front_pic_entry:
                     front_pic = self.front_pic_entry.get().strip()
+                # 根据新闻标题生成video_description
+                video_description = self.generate_video_description_from_titles()
                 full_data = {
                     'news_blocks': self.video_data,
-                    'front_pic': front_pic
+                    'front_pic': front_pic,
+                    'video_description': video_description
                 }
                 with open(video_data_file, 'w', encoding='utf-8') as f:
                     json.dump(full_data, f, ensure_ascii=False, indent=2)

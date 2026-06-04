@@ -724,6 +724,8 @@ class EnhancedKioskoDownloader:
                                        highlightthickness=0, bg='#FAFAFA')
         self.video_desc_text.pack(fill=tk.X, pady=3, ipady=2)
         
+        self.video_generator.video_desc_text = self.video_desc_text
+        
         short_title_label_frame = tk.Frame(video_info_frame, bg='white')
         short_title_label_frame.pack(fill=tk.X)
         tk.Label(short_title_label_frame, text="短标题", bg='white', 
