@@ -21,6 +21,18 @@ class UIHelpers:
         self.main_app = main_app
         # 日期浏览偏移量（0=今天，-1=前一天，-2=前两天）
         self.date_offset = 0
+        # 缩放相关属性
+        self.zoom_level = 1.0  # 当前缩放级别
+        self.zoom_x_offset = 0  # 缩放后的X偏移
+        self.zoom_y_offset = 0  # 缩放后的Y偏移
+        self.last_mouse_x = 0  # 上次鼠标位置
+        self.last_mouse_y = 0
+        # 右键拖动相关属性
+        self.is_right_dragging = False  # 是否正在右键拖动
+        self.right_drag_start_x = 0  # 右键拖动起始X坐标
+        self.right_drag_start_y = 0  # 右键拖动起始Y坐标
+        self.right_drag_start_offset_x = 0  # 右键拖动起始时的X偏移
+        self.right_drag_start_offset_y = 0  # 右键拖动起始时的Y偏移
     
     def show_fullscreen_progress(self, title, message, progress=0):
         """显示在当前窗口中间的进度层
@@ -132,7 +144,10 @@ class UIHelpers:
             y_offset = (canvas_height - new_size[1]) // 2
             
             # 绘制图片
-            canvas.create_image(x_offset, y_offset, anchor=tk.NW, image=self.preview_photo)
+            img_id = canvas.create_image(x_offset, y_offset, anchor=tk.NW, image=self.preview_photo)
+            
+            # 存储图片边界框
+            self.preview_image_bbox = (x_offset, y_offset, x_offset + new_size[0], y_offset + new_size[1])
             
             # 直接从video_data中获取新闻块的位置信息
             print(f"从JSON数据中获取 {len(self.video_data)} 个新闻块的位置信息...")
@@ -163,6 +178,7 @@ class UIHelpers:
             canvas.bind("<Button-1>", lambda e: self.on_preview_click(e, canvas, orig_width, orig_height, ratio, x_offset, y_offset))
             canvas.bind("<B1-Motion>", lambda e: self.on_preview_drag(e, canvas, orig_width, orig_height, ratio, x_offset, y_offset))
             canvas.bind("<ButtonRelease-1>", self.on_preview_release)
+            canvas.bind("<MouseWheel>", self.on_preview_zoom)
             
             # 存储当前状态
             self.drag_data = {
@@ -283,7 +299,10 @@ class UIHelpers:
                     y_offset = (canvas_height - new_size[1]) // 2
                     
                     # 绘制图片
-                    canvas.create_image(x_offset, y_offset, anchor=tk.NW, image=self.preview_photo)
+                    img_id = canvas.create_image(x_offset, y_offset, anchor=tk.NW, image=self.preview_photo)
+                    
+                    # 存储图片边界框
+                    self.preview_image_bbox = (x_offset, y_offset, x_offset + new_size[0], y_offset + new_size[1])
                     
                     # 绘制所有新闻块的矩形框
                     colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', 
@@ -294,6 +313,7 @@ class UIHelpers:
                     canvas.bind("<B1-Motion>", lambda e: self.on_preview_drag(e, canvas, orig_width, orig_height, ratio, x_offset, y_offset))
                     canvas.bind("<ButtonRelease-1>", self.on_preview_release)
                     canvas.bind("<Double-1>", lambda e: self.on_preview_double_click(e))
+                    canvas.bind("<MouseWheel>", self.on_preview_zoom)
                     
                     # 存储当前状态
                     self.drag_data = {
@@ -791,8 +811,20 @@ class UIHelpers:
                 print(f"导出选中区域失败: {e}")
                 self.update_progress(f"导出失败: {str(e)}", 0, "#E74C3C")
     
-    def on_preview_click(self, event, canvas, orig_width, orig_height, ratio, x_offset, y_offset):
+    def on_preview_click(self, event, canvas, orig_width=None, orig_height=None, ratio=None, x_offset=None, y_offset=None):
         """预览画布鼠标点击事件"""
+        # 从 drag_data 获取动态值（支持缩放后拖动）
+        if ratio is None or orig_width is None:
+            ratio = self.drag_data.get('ratio', 1.0)
+            orig_width = self.drag_data.get('orig_width', 100)
+            orig_height = self.drag_data.get('orig_height', 100)
+            x_offset = self.drag_data.get('x_offset', 0)
+            y_offset = self.drag_data.get('y_offset', 0)
+        
+        # 将鼠标坐标转换为原始图片坐标
+        mouse_x_in_orig = (event.x - x_offset) / ratio
+        mouse_y_in_orig = (event.y - y_offset) / ratio
+        
         # 检查是否点击了控制点（增大点击检测范围）
         click_range = 15  # 点击检测范围
         for i in range(len(self.video_data)):
@@ -820,13 +852,13 @@ class UIHelpers:
                             print(f"开始调整大小: 新闻{i+1}, 控制点{j}")
                             return
         
-        # 检查是否点击了矩形框
+        # 检查是否点击了矩形框（使用原始图片坐标）
         for i in range(len(self.video_data)):
-            rects = canvas.find_withtag(f'news_block_{i}')
-            if rects:
-                rect_id = rects[0]
-                bbox = canvas.bbox(rect_id)
-                if bbox and self._point_in_bbox((event.x, event.y), bbox):
+            news = self.video_data[i]
+            if 'position' in news:
+                x1, y1, x2, y2 = news['position']
+                # 检查鼠标是否在原始图片坐标范围内
+                if x1 <= mouse_x_in_orig <= x2 and y1 <= mouse_y_in_orig <= y2:
                     # 点击了矩形框，开始移动
                     self.drag_data['is_dragging'] = True
                     self.drag_data['drag_type'] = 'move'
@@ -835,13 +867,19 @@ class UIHelpers:
                     self.drag_data['news_index'] = i
                     
                     # 保存原始位置
-                    news = self.video_data[i]
                     self.drag_data['original_position'] = news.get('position', [0, 0, 0, 0])
                     print(f"开始移动: 新闻{i+1}")
                     return
     
-    def on_preview_drag(self, event, canvas, orig_width, orig_height, ratio, x_offset, y_offset):
+    def on_preview_drag(self, event, canvas, orig_width=None, orig_height=None, ratio=None, x_offset=None, y_offset=None):
         """预览画布鼠标拖动事件"""
+        # 从 drag_data 获取动态值（支持缩放后拖动）
+        if ratio is None or orig_width is None:
+            ratio = self.drag_data.get('ratio', 1.0)
+            orig_width = self.drag_data.get('orig_width', 100)
+            orig_height = self.drag_data.get('orig_height', 100)
+            x_offset = self.drag_data.get('x_offset', 0)
+            y_offset = self.drag_data.get('y_offset', 0)
         if not (self.drag_data['is_dragging'] or self.drag_data['is_resizing']):
             return
         
@@ -920,6 +958,11 @@ class UIHelpers:
             # 更新视频数据中的位置
             self.video_data[news_index]['position'] = [new_x1, new_y1, new_x2, new_y2]
             
+            # 更新原始位置和起始鼠标位置（支持连续拖动）
+            self.drag_data['original_position'] = [new_x1, new_y1, new_x2, new_y2]
+            self.drag_data['start_x'] = event.x
+            self.drag_data['start_y'] = event.y
+            
             # 只更新当前拖动的矩形框和控制点，不重新绘制整个画布
             x1_scaled = x_offset + int(new_x1 * ratio)
             y1_scaled = y_offset + int(new_y1 * ratio)
@@ -970,6 +1013,268 @@ class UIHelpers:
         x, y = point
         x1, y1, x2, y2 = bbox
         return x1 <= x <= x2 and y1 <= y <= y2
+    
+    def redraw_preview_with_zoom(self):
+        """重新绘制带缩放的预览图片和选择框"""
+        if not hasattr(self, 'preview_canvas') or not self.current_image_file:
+            return
+        
+        if not os.path.exists(self.current_image_file):
+            return
+        
+        try:
+            canvas = self.preview_canvas
+            canvas_width = canvas.winfo_width()
+            canvas_height = canvas.winfo_height()
+            
+            if canvas_width <= 1 or canvas_height <= 1:
+                return
+            
+            image = Image.open(self.current_image_file)
+            orig_width, orig_height = image.size
+            
+            # 计算无缩放时的基础比例和尺寸
+            base_ratio = min(canvas_width / orig_width, canvas_height / orig_height, 1.0)
+            base_width = int(orig_width * base_ratio)
+            base_height = int(orig_height * base_ratio)
+            
+            # 应用缩放
+            scaled_width = int(base_width * self.zoom_level)
+            scaled_height = int(base_height * self.zoom_level)
+            
+            # 计算偏移量（居中时）
+            x_offset = (canvas_width - scaled_width) // 2 + self.zoom_x_offset
+            y_offset = (canvas_height - scaled_height) // 2 + self.zoom_y_offset
+            
+            # 缩放图片
+            scaled_image = image.resize((scaled_width, scaled_height), Image.Resampling.LANCZOS)
+            self.preview_photo = ImageTk.PhotoImage(scaled_image)
+            
+            # 清空canvas并绘制新图片
+            canvas.delete("all")
+            img_id = canvas.create_image(x_offset, y_offset, anchor=tk.NW, image=self.preview_photo)
+            
+            # 存储图片边界框
+            self.preview_image_bbox = (x_offset, y_offset, x_offset + scaled_width, y_offset + scaled_height)
+            
+            # 计算当前的实际比例（用于绘制选择框）
+            actual_ratio = scaled_width / orig_width
+            
+            # 颜色列表
+            colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', 
+                      '#FF8800', '#8800FF', '#0088FF', '#88FF00']
+            
+            # 获取当前选中的新闻索引
+            news_index = getattr(self, 'current_selected_news_index', -1)
+            
+            # 绘制所有新闻块的矩形框
+            for i, news in enumerate(self.video_data):
+                try:
+                    if 'position' not in news:
+                        continue
+                    
+                    x1, y1, x2, y2 = news['position']
+                    x1_scaled = x_offset + int(x1 * actual_ratio)
+                    y1_scaled = y_offset + int(y1 * actual_ratio)
+                    x2_scaled = x_offset + int(x2 * actual_ratio)
+                    y2_scaled = y_offset + int(y2 * actual_ratio)
+                    
+                    # 选中的新闻块用红色粗线显示，其他用细线显示
+                    if i == news_index:
+                        color = '#FF0000'
+                        line_width = 4
+                    else:
+                        color = colors[i % len(colors)]
+                        line_width = 2
+                    
+                    # 创建矩形框
+                    canvas.create_rectangle(
+                        x1_scaled, y1_scaled, x2_scaled, y2_scaled,
+                        outline=color, width=line_width, tags=f'news_block_{i}'
+                    )
+                    
+                    # 添加调整大小的控制点
+                    handles = [
+                        (x1_scaled, y1_scaled),  # 左上
+                        (x2_scaled, y1_scaled),  # 右上
+                        (x1_scaled, y2_scaled),  # 左下
+                        (x2_scaled, y2_scaled),  # 右下
+                        ((x1_scaled + x2_scaled) // 2, y1_scaled),  # 上中
+                        ((x1_scaled + x2_scaled) // 2, y2_scaled),  # 下中
+                        (x1_scaled, (y1_scaled + y2_scaled) // 2),  # 左中
+                        (x2_scaled, (y1_scaled + y2_scaled) // 2)   # 右中
+                    ]
+                    
+                    for j, (hx, hy) in enumerate(handles):
+                        handle_size = 8
+                        canvas.create_oval(
+                            hx-handle_size, hy-handle_size, hx+handle_size, hy+handle_size,
+                            fill='#FF0000' if i == news_index else '#00FF00',
+                            outline='white', width=1,
+                            tags=f'handle_{i}_{j}'
+                        )
+                    
+                    # 显示新闻标题
+                    label_text = f"{i+1}. {news['title'][:10]}..."
+                    label_y = y1_scaled - 20 if y1_scaled - 20 > 0 else y1_scaled
+                    canvas.create_text(
+                        x1_scaled + 5, label_y,
+                        text=label_text,
+                        fill=color, font=("Microsoft YaHei", 9, "bold"),
+                        anchor=tk.SW,
+                        tags=f'label_{i}'
+                    )
+                except Exception as e:
+                    print(f"绘制新闻块 {i} 失败: {e}")
+            
+            # 更新拖动状态中的比例和偏移量
+            if hasattr(self, 'drag_data'):
+                self.drag_data['orig_width'] = orig_width
+                self.drag_data['orig_height'] = orig_height
+                self.drag_data['ratio'] = actual_ratio
+                self.drag_data['x_offset'] = x_offset
+                self.drag_data['y_offset'] = y_offset
+            
+            # 重新绑定鼠标事件（使用动态参数）
+            canvas.bind("<Button-1>", lambda e: self.on_preview_click(e, canvas))
+            canvas.bind("<B1-Motion>", lambda e: self.on_preview_drag(e, canvas))
+            canvas.bind("<ButtonRelease-1>", self.on_preview_release)
+            canvas.bind("<Double-1>", lambda e: self.on_preview_double_click(e))
+            canvas.bind("<MouseWheel>", self.on_preview_zoom)
+            # 绑定右键拖动事件
+            canvas.bind("<Button-3>", self.on_preview_right_click)
+            canvas.bind("<B3-Motion>", self.on_preview_right_drag)
+            canvas.bind("<ButtonRelease-3>", self.on_preview_right_release)
+            
+        except Exception as e:
+            print(f"重绘预览失败: {e}")
+    
+    def on_preview_right_click(self, event):
+        """右键点击事件，开始拖动图片"""
+        if not hasattr(self, 'preview_canvas') or not self.current_image_file:
+            return
+        
+        # 开始右键拖动
+        self.is_right_dragging = True
+        self.right_drag_start_x = event.x
+        self.right_drag_start_y = event.y
+        self.right_drag_start_offset_x = self.zoom_x_offset
+        self.right_drag_start_offset_y = self.zoom_y_offset
+        print(f"开始右键拖动图片")
+    
+    def on_preview_right_drag(self, event):
+        """右键拖动事件，移动图片位置"""
+        if not self.is_right_dragging:
+            return
+        
+        if not hasattr(self, 'preview_canvas'):
+            return
+        
+        # 计算拖动距离
+        dx = event.x - self.right_drag_start_x
+        dy = event.y - self.right_drag_start_y
+        
+        # 更新图片偏移量
+        self.zoom_x_offset = self.right_drag_start_offset_x + dx
+        self.zoom_y_offset = self.right_drag_start_offset_y + dy
+        
+        # 重新绘制预览
+        self.redraw_preview_with_zoom()
+    
+    def on_preview_right_release(self, event):
+        """右键释放事件，结束拖动图片"""
+        self.is_right_dragging = False
+        print(f"结束右键拖动图片")
+    
+    def on_preview_zoom(self, event):
+        """鼠标滚轮缩放图片，以鼠标位置为中心"""
+        if not hasattr(self, 'preview_canvas') or not self.current_image_file:
+            return
+        
+        if not os.path.exists(self.current_image_file):
+            return
+        
+        try:
+            canvas = self.preview_canvas
+            
+            # 获取鼠标在canvas上的位置
+            mouse_x = canvas.canvasx(event.x)
+            mouse_y = canvas.canvasy(event.y)
+            
+            # 获取当前图片在canvas上的位置和尺寸
+            if not hasattr(self, 'preview_image_bbox'):
+                return
+            
+            img_bbox = self.preview_image_bbox
+            if img_bbox is None:
+                return
+            
+            # 检查鼠标是否在图片范围内
+            if not (img_bbox[0] <= mouse_x <= img_bbox[2] and img_bbox[1] <= mouse_y <= img_bbox[3]):
+                return
+            
+            # 计算缩放因子（滚轮向上放大，向下缩小）
+            scale_factor = 1.1 if event.delta > 0 else 0.9
+            
+            # 更新缩放级别
+            new_zoom = self.zoom_level * scale_factor
+            # 限制缩放范围
+            new_zoom = max(0.5, min(new_zoom, 5.0))
+            
+            if new_zoom == self.zoom_level:
+                return
+            
+            # 计算鼠标在原图上的位置（相对于当前缩放级别）
+            canvas_width = canvas.winfo_width()
+            canvas_height = canvas.winfo_height()
+            
+            # 获取原图尺寸
+            with Image.open(self.current_image_file) as img:
+                orig_width, orig_height = img.size
+            
+            # 计算原图在canvas上的初始尺寸（无缩放时）
+            base_ratio = min(canvas_width / orig_width, canvas_height / orig_height, 1.0)
+            base_width = int(orig_width * base_ratio)
+            base_height = int(orig_height * base_ratio)
+            
+            # 计算原图在canvas上的初始位置（居中）
+            base_x = (canvas_width - base_width) // 2
+            base_y = (canvas_height - base_height) // 2
+            
+            # 计算鼠标在原图上的位置（无缩放时）
+            mouse_x_in_base = mouse_x - base_x
+            mouse_y_in_base = mouse_y - base_y
+            
+            # 计算鼠标在原图上的位置（有当前缩放时）
+            current_width = base_width * self.zoom_level
+            current_height = base_height * self.zoom_level
+            current_x = base_x + (self.zoom_x_offset if self.zoom_level > 1 else 0)
+            current_y = base_y + (self.zoom_y_offset if self.zoom_level > 1 else 0)
+            
+            # 计算鼠标相对于当前显示图片的位置
+            mouse_x_in_current = mouse_x - current_x
+            mouse_y_in_current = mouse_y - current_y
+            
+            # 计算鼠标在原图上的位置
+            mouse_x_in_orig = mouse_x_in_current / self.zoom_level
+            mouse_y_in_orig = mouse_y_in_current / self.zoom_level
+            
+            # 计算新缩放后的偏移量，使鼠标位置保持不变
+            new_width = base_width * new_zoom
+            new_height = base_height * new_zoom
+            
+            # 计算新的偏移量，使鼠标位置对应到原图上的同一点
+            self.zoom_x_offset = mouse_x - base_x - mouse_x_in_orig * new_zoom
+            self.zoom_y_offset = mouse_y - base_y - mouse_y_in_orig * new_zoom
+            
+            # 更新缩放级别
+            self.zoom_level = new_zoom
+            
+            # 重新绘制预览
+            self.redraw_preview_with_zoom()
+            
+        except Exception as e:
+            print(f"缩放失败: {e}")
     
     def previous_day_images(self):
         """显示前一天的图片"""
@@ -1094,6 +1399,11 @@ class UIHelpers:
             if filepath and os.path.exists(filepath):
                 # 设置为当前图片文件
                 self.current_image_file = filepath
+                
+                # 重置缩放级别
+                self.zoom_level = 1.0
+                self.zoom_x_offset = 0
+                self.zoom_y_offset = 0
                 
                 # 在中间预览区域显示图片
                 if hasattr(self, 'preview_canvas') and self.preview_canvas:
