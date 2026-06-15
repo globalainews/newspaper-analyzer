@@ -797,8 +797,32 @@ class TimingSynchronizer:
             
             # 检查目录是否存在
             if not os.path.exists(draft_dir):
-                self.show_warning("警告", f"剪映草稿目录不存在: {draft_dir}")
-                return
+                # 查找所有以该图片名为前缀的草稿目录
+                import glob
+                draft_pattern = os.path.join(self.jianying_drafts_dir, f"{base_name}_*")
+                existing_drafts = [os.path.basename(d) for d in glob.glob(draft_pattern) if os.path.isdir(d)]
+                
+                if not existing_drafts:
+                    self.show_warning("警告", f"未找到相关剪映草稿目录")
+                    return
+                
+                # 如果只有一个匹配的草稿，直接使用
+                if len(existing_drafts) == 1:
+                    draft_name = existing_drafts[0]
+                    draft_dir = os.path.join(self.jianying_drafts_dir, draft_name)
+                else:
+                    # 弹出选择对话框让用户选择
+                    from tkinter import simpledialog
+                    selected = simpledialog.askstring("选择草稿", 
+                        f"未找到今天的草稿，请选择一个历史草稿:\n" + "\n".join(existing_drafts),
+                        initialvalue=existing_drafts[-1])
+                    
+                    if selected and selected in existing_drafts:
+                        draft_name = selected
+                        draft_dir = os.path.join(self.jianying_drafts_dir, draft_name)
+                    else:
+                        self.show_warning("警告", "未选择有效草稿")
+                        return
             
             # 读取draft_content.json文件
             draft_content_file = os.path.join(draft_dir, "draft_content.json")
