@@ -41,8 +41,8 @@ def expand_to_ratio(image, target_ratio=(3, 4), bg_color=(255, 255, 255)):
     # 创建新画布
     new_image = Image.new('RGB', (new_w, new_h), bg_color)
     
-    # 将原图放在顶部右对齐粘贴
-    x_offset = new_w - w  # 右对齐
+    # 将原图放在顶部左对齐粘贴
+    x_offset = 0  # 左对齐
     y_offset = 0  # 顶部对齐
     new_image.paste(image, (x_offset, y_offset))
     
