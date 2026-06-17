@@ -453,9 +453,8 @@ class TimingSynchronizer:
 
             sorted_sticker_segments = sorted(all_sticker_segments, key=lambda x: x['start'])
 
-            update_count = 0
+            # 处理贴纸时序（保留时间范围，不改变位置）
             for idx, timing in enumerate(new_timing):
-                found_matching_sticker = False
                 for si in range(len(sorted_sticker_segments)):
                     sticker_item = sorted_sticker_segments[si]
                     sticker_seg = sticker_item['segment']
@@ -465,40 +464,12 @@ class TimingSynchronizer:
                     if sticker_name != "春日晴天-卡通太阳遮挡":
                         continue
 
-                    found_matching_sticker = True
-
+                    # 只调整时序，不改变位置
                     if 'target_timerange' not in sticker_seg:
                         sticker_seg['target_timerange'] = {}
                     sticker_seg['target_timerange']['start'] = timing.get('new_start', 0)
                     sticker_seg['target_timerange']['duration'] = timing.get('new_duration', 0) + gap_04s
 
-                    if news_data and idx < len(news_data):
-                        news = news_data[idx]
-                        position = news.get('position', [0, 0, 0, 0])
-                        if len(position) == 4:
-                            x1, y1, x2, y2 = position
-                            news_center_x = (x1 + x2) / 2
-                            news_center_y = (y1 + y2) / 2
-
-                            newspaper_type = self._detect_newspaper_type(news)
-                            video_width, video_height = self._get_video_dimensions()
-                            paper_config = self._get_newspaper_config(newspaper_type)
-
-                            transform_x, transform_y = self._calculate_sticker_transform(
-                                news_center_x, news_center_y,
-                                paper_config, video_width, video_height,
-                                orig_image_width, orig_image_height
-                            )
-
-                            if 'clip' not in sticker_seg:
-                                sticker_seg['clip'] = {}
-                            if 'transform' not in sticker_seg['clip']:
-                                sticker_seg['clip']['transform'] = {}
-
-                            sticker_seg['clip']['transform']['x'] = transform_x
-                            sticker_seg['clip']['transform']['y'] = transform_y
-
-                    update_count += 1
                     sorted_sticker_segments.pop(si)
                     break
 
@@ -562,10 +533,10 @@ class TimingSynchronizer:
                                             scale = 0.92
                                         else:
                                             scale = 0.92
-                                        segment['clip']['scale']['x'] = scale
-                                        segment['clip']['scale']['y'] = scale
-                                        segment['clip']['transform']['x'] = 0.0
-                                        segment['clip']['transform']['y'] = 0.0
+                                        # segment['clip']['scale']['x'] = scale
+                                        # segment['clip']['scale']['y'] = scale
+                                        # segment['clip']['transform']['x'] = 0.0
+                                        # segment['clip']['transform']['y'] = 0.0
 
                                     break
 
