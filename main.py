@@ -734,6 +734,11 @@ class EnhancedKioskoDownloader:
                  command=lambda: self.copy_var_to_clipboard(self.short_title_var),
                  font=("Segoe UI Emoji", 10), bg='#3498DB', fg='white',
                  relief=tk.FLAT, padx=5, pady=0, cursor='hand2').pack(side=tk.LEFT, padx=6)
+        # 生成语音按钮
+        tk.Button(short_title_label_frame, text="🔊", 
+                 command=self.generate_short_title_voice,
+                 font=("Segoe UI Emoji", 10), bg='#27AE60', fg='white',
+                 relief=tk.FLAT, padx=5, pady=0, cursor='hand2').pack(side=tk.LEFT, padx=6)
         
         self.short_title_var = tk.StringVar()
         short_title_entry = tk.Entry(video_info_frame, 
@@ -834,6 +839,90 @@ class EnhancedKioskoDownloader:
         self.root.clipboard_clear()
         self.root.clipboard_append(content)
         self.show_auto_dismiss_message("复制成功", "内容已复制到剪贴板", 1500)
+    
+    def generate_short_title_voice(self):
+        """根据短标题内容生成语音文件 ad.wav，保存到草稿目录\textReading"""
+        from tkinter import messagebox
+        try:
+            short_title = self.short_title_var.get().strip()
+            if not short_title:
+                messagebox.showwarning("警告", "请先输入短标题")
+                return
+            
+            # 获取草稿目录
+            jianying_drafts_dir = self.config.get('jianying_settings', {}).get('drafts_directory', 'E:/剪映5.9/JianyingPro Drafts')
+            
+            # 确定草稿目录（使用当前图片名+日期或查找最新的草稿目录）
+            draft_name = None
+            if self.video_generator and self.video_generator.current_image_file:
+                base_name = os.path.splitext(os.path.basename(self.video_generator.current_image_file))[0]
+                date_str = datetime.datetime.now().strftime("%Y%m%d")
+                draft_name = f"{base_name}_{date_str}"
+            
+            # 如果找不到当前草稿，查找最新的草稿目录
+            if draft_name:
+                draft_dir = os.path.join(jianying_drafts_dir, draft_name)
+                if not os.path.exists(draft_dir):
+                    # 查找所有草稿目录
+                    import glob
+                    draft_pattern = os.path.join(jianying_drafts_dir, "*")
+                    draft_dirs = [d for d in glob.glob(draft_pattern) if os.path.isdir(d)]
+                    if draft_dirs:
+                        draft_dirs.sort(key=os.path.getmtime, reverse=True)
+                        draft_dir = draft_dirs[0]
+                        draft_name = os.path.basename(draft_dir)
+                    else:
+                        messagebox.showwarning("警告", "未找到草稿目录")
+                        return
+            else:
+                # 直接查找最新的草稿目录
+                import glob
+                draft_pattern = os.path.join(jianying_drafts_dir, "*")
+                draft_dirs = [d for d in glob.glob(draft_pattern) if os.path.isdir(d)]
+                if draft_dirs:
+                    draft_dirs.sort(key=os.path.getmtime, reverse=True)
+                    draft_dir = draft_dirs[0]
+                    draft_name = os.path.basename(draft_dir)
+                else:
+                    messagebox.showwarning("警告", "未找到草稿目录")
+                    return
+            
+            # 创建 textReading 目录
+            text_reading_dir = os.path.join(draft_dir, "textReading")
+            os.makedirs(text_reading_dir, exist_ok=True)
+            
+            # 生成语音文件
+            output_file = os.path.join(text_reading_dir, "ad.wav")
+            
+            # 使用语音克隆模块生成语音
+            from voice_clone import get_cosyvoice_cloner
+            
+            cloner = get_cosyvoice_cloner(self.config)
+            if not cloner.model_loaded:
+                if not cloner.load_model():
+                    messagebox.showerror("错误", "语音模型加载失败")
+                    return
+            
+            cosyvoice_config = self.config.get('cosyvoice', {})
+            instruct = cosyvoice_config.get('test_instruct')
+            
+            success = cloner.generate_voice(
+                short_title,
+                output_file,
+                silent=False,
+                text_frontend=False,
+                instruct=instruct
+            )
+            
+            if success:
+                messagebox.showinfo("成功", f"语音文件已生成！\n\n文件路径:\n{output_file}")
+            else:
+                messagebox.showerror("错误", "语音生成失败")
+                
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("错误", f"生成语音失败: {str(e)}")
     
     def browse_video_file(self):
         """浏览选择视频文件"""
