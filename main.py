@@ -350,12 +350,19 @@ class EnhancedKioskoDownloader:
                 font=("Microsoft YaHei", 12, "bold"),
                 bg='#2C3E50', fg='white').pack(side=tk.LEFT, padx=10, pady=8)
         
-        tk.Button(result_header, text="💾 保存",
+        tk.Button(result_header, text="� 保存",
                  font=("Microsoft YaHei", 9),
                  bg='#27AE60', fg='white',
                  relief=tk.FLAT, padx=10, pady=3,
                  cursor='hand2',
-                 command=self.on_save_result).pack(side=tk.RIGHT, padx=10)
+                 command=self.on_save_result).pack(side=tk.RIGHT, padx=5)
+        
+        tk.Button(result_header, text="� 加载",
+                 font=("Microsoft YaHei", 9),
+                 bg='#3498DB', fg='white',
+                 relief=tk.FLAT, padx=10, pady=3,
+                 cursor='hand2',
+                 command=self.on_load_result).pack(side=tk.RIGHT, padx=10)
         
         result_text_frame = tk.Frame(result_section, bg='#E9ECEF')
         result_text_frame.pack(fill=tk.BOTH, expand=True, pady=(5, 0))
@@ -856,7 +863,7 @@ class EnhancedKioskoDownloader:
             draft_name = None
             if self.video_generator and self.video_generator.current_image_file:
                 base_name = os.path.splitext(os.path.basename(self.video_generator.current_image_file))[0]
-                date_str = datetime.datetime.now().strftime("%Y%m%d")
+                date_str = datetime.now().strftime("%Y%m%d")
                 draft_name = f"{base_name}_{date_str}"
             
             # 如果找不到当前草稿，查找最新的草稿目录
@@ -1472,6 +1479,38 @@ class EnhancedKioskoDownloader:
             self.image_listbox.selection_set(self.current_selected_index)
             self.image_listbox.activate(self.current_selected_index)
             self.image_listbox.see(self.current_selected_index)
+    
+    def on_load_result(self):
+        """从文本文件加载分析结果"""
+        from tkinter import filedialog
+        
+        file_path = filedialog.askopenfilename(
+            title="选择分析结果文件",
+            filetypes=[("JSON 文件", "*.json"), ("文本文件", "*.txt"), ("所有文件", "*.*")],
+            initialdir=self.analysis_dir
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # 清空当前分析结果并加载新内容
+                self.result_text.delete(1.0, tk.END)
+                self.result_text.insert(tk.END, content)
+                
+                # 尝试解析新闻块
+                news_blocks = self.parse_news_blocks(content)
+                
+                # 如果有图片选中，尝试更新预览
+                selection = self.image_listbox.curselection()
+                if selection:
+                    filename = self.image_listbox.get(selection[0])
+                    self.show_image_preview(filename)
+                
+                messagebox.showinfo("加载成功", f"已从文件加载分析结果:\n{file_path}")
+            except Exception as e:
+                messagebox.showerror("错误", f"加载文件失败: {str(e)}")
     
     def on_save_result(self):
         """保存修改后的分析结果"""

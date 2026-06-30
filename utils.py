@@ -120,11 +120,11 @@ def copy_todays_newspaper():
     # 获取今天日期（YYYYMMDD格式）
     today = datetime.datetime.now().strftime('%Y%m%d')
     
-    # 查找今天的报纸文件（WSJ或FT开头 + 日期 + .jpg）
+    # 查找今天的报纸文件（WSJ/FT开头 + 今天日期 + 支持jpg/png）
     today_files = []
     for f in os.listdir(downloads_dir):
-        if f.lower().endswith('.jpg'):
-            # 检查文件名是否符合格式：WSJ/FT + 日期
+        lower_name = f.lower()
+        if lower_name.endswith('.jpg') or lower_name.endswith('.jpeg') or lower_name.endswith('.png'):
             upper_name = f.upper()
             if (upper_name.startswith('WSJ') or upper_name.startswith('FT')) and today in upper_name:
                 today_files.append(f)
